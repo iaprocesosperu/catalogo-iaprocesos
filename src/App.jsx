@@ -669,43 +669,48 @@ function SubMenu(P){
 function OrigenesScr(P){
   const{eid,lid,tit,oris,notify,loadAll,setScr}=P
   const[showAdd,setShowAdd]=useState(false)
-  const[f,setF]=useState({nombre:'',inversion:'',precio_costo_defecto:'',precio_venta_defecto:'',fecha:'',observaciones:''})
+  const[f,setF]=useState({nombre:'',cantidad:'',precio_costo_defecto:'',precio_venta_defecto:'',fecha:'',observaciones:''})
   const[editId,setEditId]=useState(null)
   const s=(k,v)=>setF(p=>({...p,[k]:v}))
+  const invCalc=parseFloat(f.cantidad||0)*parseFloat(f.precio_costo_defecto||0)
 
   const guardar=async()=>{if(!f.nombre.trim()){notify('Nombre obligatorio','error');return}
-    const data={empresa_id:eid,linea_id:lid,nombre:f.nombre.trim(),inversion:parseFloat(f.inversion)||null,
+    const data={empresa_id:eid,linea_id:lid,nombre:f.nombre.trim(),cantidad:parseInt(f.cantidad)||0,
       precio_costo_defecto:parseFloat(f.precio_costo_defecto)||null,precio_venta_defecto:parseFloat(f.precio_venta_defecto)||null,
       fecha:f.fecha||null,observaciones:f.observaciones||null}
     if(editId){await supabase.from('origenes').update(data).eq('id',editId);notify('Actualizado')}
     else{await supabase.from('origenes').insert(data);notify('Agregado')}
-    setShowAdd(false);setEditId(null);setF({nombre:'',inversion:'',precio_costo_defecto:'',precio_venta_defecto:'',fecha:'',observaciones:''});await loadAll()
+    setShowAdd(false);setEditId(null);setF({nombre:'',cantidad:'',precio_costo_defecto:'',precio_venta_defecto:'',fecha:'',observaciones:''});await loadAll()
   }
-  const editar=o=>{setEditId(o.id);setF({nombre:o.nombre||'',inversion:String(o.inversion||''),precio_costo_defecto:String(o.precio_costo_defecto||''),
+  const editar=o=>{setEditId(o.id);setF({nombre:o.nombre||'',cantidad:String(o.cantidad||''),precio_costo_defecto:String(o.precio_costo_defecto||''),
     precio_venta_defecto:String(o.precio_venta_defecto||''),fecha:o.fecha||'',observaciones:o.observaciones||''});setShowAdd(true)}
   const eliminar=async id=>{if(!confirm('¿Eliminar?'))return;await supabase.from('origenes').update({activo:false}).eq('id',id);notify('Eliminado');await loadAll()}
 
   return(<div>
     <Hdr tit={tit} sec="📋 Orígenes" onBack={()=>setScr('submenu')}/>
     <div style={{padding:16}}>
-      <button onClick={()=>{setShowAdd(!showAdd);setEditId(null);setF({nombre:'',inversion:'',precio_costo_defecto:'',precio_venta_defecto:'',fecha:'',observaciones:''})}}
+      <button onClick={()=>{setShowAdd(!showAdd);setEditId(null);setF({nombre:'',cantidad:'',precio_costo_defecto:'',precio_venta_defecto:'',fecha:'',observaciones:''})}}
         style={{width:'100%',padding:12,borderRadius:8,border:'2px dashed '+G.gold,background:G.goldLt,cursor:'pointer',color:G.gold,fontWeight:700,fontSize:13,marginBottom:12}}>
         ➕ Nuevo origen</button>
       {showAdd&&(<Crd title={editId?'Editar origen':'Nuevo origen'}>
         <label style={{fontSize:11,color:G.muted}}>Nombre *</label>
         <input value={f.nombre} onChange={e=>s('nombre',e.target.value)} placeholder="Fardo 1 Mujeres" style={iS(G)}/>
         <div style={{display:'flex',gap:8}}>
+          <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Cantidad items</label>
+            <input value={f.cantidad} onChange={e=>s('cantidad',e.target.value)} type="number" placeholder="100" style={iS(G)}/></div>
           <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Precio Costo (S/)</label>
             <input value={f.precio_costo_defecto} onChange={e=>s('precio_costo_defecto',e.target.value)} type="number" placeholder="5" style={iS(G)}/></div>
-          <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Precio Venta (S/)</label>
-            <input value={f.precio_venta_defecto} onChange={e=>s('precio_venta_defecto',e.target.value)} type="number" placeholder="15" style={iS(G)}/></div>
         </div>
         <div style={{display:'flex',gap:8}}>
-          <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Inversión total (S/)</label>
-            <input value={f.inversion} onChange={e=>s('inversion',e.target.value)} type="number" placeholder="500" style={iS(G)}/></div>
+          <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Precio Venta (S/)</label>
+            <input value={f.precio_venta_defecto} onChange={e=>s('precio_venta_defecto',e.target.value)} type="number" placeholder="15" style={iS(G)}/></div>
           <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Fecha</label>
             <input value={f.fecha} onChange={e=>s('fecha',e.target.value)} type="date" style={iS(G)}/></div>
         </div>
+        {invCalc>0&&(<div style={{background:G.goldLt,borderRadius:8,padding:10,marginBottom:8,textAlign:'center'}}>
+          <p style={{fontSize:10,color:G.muted,margin:0}}>Inversión calculada</p>
+          <p style={{fontSize:18,fontWeight:800,color:G.gold,margin:0}}>S/ {invCalc.toFixed(2)}</p>
+          <p style={{fontSize:9,color:G.muted,margin:0}}>{f.cantidad} items × S/{f.precio_costo_defecto}</p></div>)}
         <label style={{fontSize:11,color:G.muted}}>Observaciones</label>
         <textarea value={f.observaciones} onChange={e=>s('observaciones',e.target.value)} rows={2} style={{...iS(G),resize:'vertical'}}/>
         <div style={{display:'flex',gap:8}}>
@@ -717,8 +722,8 @@ function OrigenesScr(P){
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'start'}}>
           <div><p style={{fontSize:14,fontWeight:600,margin:0}}>{o.nombre}</p>
             <p style={{fontSize:10,color:G.muted,margin:'2px 0'}}>
-              {o.precio_costo_defecto?'C: S/'+o.precio_costo_defecto:''} {o.precio_venta_defecto?'V: S/'+o.precio_venta_defecto:''}
-              {o.inversion?' • Inv: S/'+o.inversion:''} {o.fecha?' • '+o.fecha:''}</p>
+              {o.cantidad?o.cantidad+' items':''} {o.precio_costo_defecto?'• C: S/'+o.precio_costo_defecto:''} {o.precio_venta_defecto?'V: S/'+o.precio_venta_defecto:''}
+              {o.cantidad&&o.precio_costo_defecto?' • Inv: S/'+(o.cantidad*o.precio_costo_defecto).toFixed(0):''} {o.fecha?' • '+o.fecha:''}</p>
             {o.observaciones&&<p style={{fontSize:9,color:G.muted,margin:0}}>{o.observaciones}</p>}</div>
           <div style={{display:'flex',gap:4}}>
             <button onClick={()=>editar(o)} style={{background:G.goldSf,color:G.goldDk,border:'none',borderRadius:6,padding:'5px 8px',cursor:'pointer',fontSize:10}}>Editar</button>
