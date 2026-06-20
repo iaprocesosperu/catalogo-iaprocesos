@@ -1,0 +1,2 @@
+{"name":"IA Procesos Catálogo","short_name":"Catálogo","start_url":"/","display":"standalone","theme_color":"#C5A55A","background_color":"#FFFFFF",
+"share_target":{"action":"/?share=true","method":"POST","enctype":"multipart/form-data","params":{"files":[{"name":"image","accept":["image/*"]}]}}}

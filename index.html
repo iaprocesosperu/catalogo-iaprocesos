@@ -3,9 +3,15 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
-  <meta name="theme-color" content="#EC4899"/>
+  <meta name="theme-color" content="#C5A55A"/>
+  <link rel="manifest" href="/manifest.json"/>
   <title>IA Procesos — Catálogo</title>
-  <style>*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}body{font-family:system-ui,-apple-system,sans-serif;background:#FDF2F8}</style>
+  <style>*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}body{font-family:system-ui,-apple-system,sans-serif;background:#fff}
+  .scrollbar-hide::-webkit-scrollbar{display:none}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}</style>
 </head>
-<body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+  <script>if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js')</script>
+</body>
 </html>
