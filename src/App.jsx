@@ -125,7 +125,7 @@ export default function App(){
       {scr==='venta'&&<VentaScreen {...P} prod={ventaP}/>}
       {scr==='submenu'&&<SubMenu {...P}/>}
       {scr==='lineas'&&<MantScr tipo="lineas" data={lineas} {...P}/>}
-      {scr==='categorias'&&<MantScr tipo="categorias" data={cF} {...P}/>}
+      {scr==='categorias'&&<CatsScr {...P}/>}
       {scr==='origenes'&&<OrigenesScr {...P}/>}
       {scr==='colores'&&<MantScr tipo="colores" data={cols} {...P}/>}
       {scr==='clientes'&&<ClientesScr {...P}/>}
@@ -685,10 +685,24 @@ function OrigenesScr(P){
   const editar=o=>{setEditId(o.id);setF({nombre:o.nombre||'',cantidad:String(o.cantidad||''),precio_costo_defecto:String(o.precio_costo_defecto||''),
     precio_venta_defecto:String(o.precio_venta_defecto||''),fecha:o.fecha||'',observaciones:o.observaciones||''});setShowAdd(true)}
   const eliminar=async id=>{if(!confirm('¿Eliminar?'))return;await supabase.from('origenes').update({activo:false}).eq('id',id);notify('Eliminado');await loadAll()}
+  const totalInv=oris.reduce((s,o)=>s+(o.cantidad||0)*(o.precio_costo_defecto||0),0)
+  const totalItems=oris.reduce((s,o)=>s+(o.cantidad||0),0)
+  const totalVenta=oris.reduce((s,o)=>s+(o.cantidad||0)*(o.precio_venta_defecto||0),0)
 
   return(<div>
     <Hdr tit={tit} sec="📋 Orígenes" onBack={()=>setScr('submenu')}/>
     <div style={{padding:16}}>
+      {/* Total general */}
+      <div style={{display:'flex',gap:8,marginBottom:12}}>
+        <div style={{flex:1,background:G.gold,borderRadius:10,padding:12,textAlign:'center'}}>
+          <p style={{color:'rgba(255,255,255,0.7)',fontSize:9,margin:0}}>Inversión Total</p>
+          <p style={{color:'#fff',fontSize:20,fontWeight:800,margin:0}}>S/{totalInv.toFixed(0)}</p>
+          <p style={{color:'rgba(255,255,255,0.7)',fontSize:9,margin:0}}>{totalItems} items</p></div>
+        <div style={{flex:1,background:G.goldDk,borderRadius:10,padding:12,textAlign:'center'}}>
+          <p style={{color:'rgba(255,255,255,0.7)',fontSize:9,margin:0}}>Venta Esperada</p>
+          <p style={{color:'#fff',fontSize:20,fontWeight:800,margin:0}}>S/{totalVenta.toFixed(0)}</p>
+          <p style={{color:'rgba(255,255,255,0.7)',fontSize:9,margin:0}}>+S/{(totalVenta-totalInv).toFixed(0)} ganancia</p></div>
+      </div>
       <button onClick={()=>{setShowAdd(!showAdd);setEditId(null);setF({nombre:'',cantidad:'',precio_costo_defecto:'',precio_venta_defecto:'',fecha:'',observaciones:''})}}
         style={{width:'100%',padding:12,borderRadius:8,border:'2px dashed '+G.gold,background:G.goldLt,cursor:'pointer',color:G.gold,fontWeight:700,fontSize:13,marginBottom:12}}>
         ➕ Nuevo origen</button>
@@ -728,6 +742,54 @@ function OrigenesScr(P){
           <div style={{display:'flex',gap:4}}>
             <button onClick={()=>editar(o)} style={{background:G.goldSf,color:G.goldDk,border:'none',borderRadius:6,padding:'5px 8px',cursor:'pointer',fontSize:10}}>Editar</button>
             <button onClick={()=>eliminar(o.id)} style={{background:'#FEE2E2',color:G.err,border:'none',borderRadius:6,padding:'5px 8px',cursor:'pointer',fontSize:10}}>🗑</button>
+          </div></div></div>))}
+    </div></div>)
+}
+
+/* ═══ CATEGORÍAS (con tallas) ═══ */
+function CatsScr(P){
+  const{eid,lid,tit,cats,notify,loadAll,setScr}=P
+  const[showAdd,setShowAdd]=useState(false)
+  const[editCat,setEditCat]=useState(null)
+  const[nombre,setNombre]=useState('')
+  const[tallasStr,setTallasStr]=useState('')
+
+  const abrir=c=>{if(c){setEditCat(c);setNombre(c.nombre);setTallasStr((c.tallas||[]).join(', '))}
+    else{setEditCat(null);setNombre('');setTallasStr('')};setShowAdd(true)}
+
+  const guardar=async()=>{if(!nombre.trim()){notify('Nombre obligatorio','error');return}
+    const tallas=tallasStr?tallasStr.split(',').map(t=>t.trim()).filter(Boolean):[]
+    if(editCat){await supabase.from('categorias').update({nombre:nombre.trim(),tallas}).eq('id',editCat.id);notify('Actualizado')}
+    else{await supabase.from('categorias').insert({empresa_id:eid,linea_id:lid,nombre:nombre.trim(),tallas,atributos:[]});notify('Agregado')}
+    setShowAdd(false);setEditCat(null);await loadAll()}
+
+  const eliminar=async c=>{if(!confirm('¿Eliminar '+c.nombre+'?'))return
+    await supabase.from('categorias').update({activo:false}).eq('id',c.id);notify('Eliminado');await loadAll()}
+
+  return(<div>
+    <Hdr tit={tit} sec="🏷️ Categorías" onBack={()=>setScr('submenu')}/>
+    <div style={{padding:16}}>
+      <button onClick={()=>abrir(null)} style={{width:'100%',padding:12,borderRadius:8,border:'2px dashed '+G.gold,background:G.goldLt,cursor:'pointer',color:G.gold,fontWeight:700,fontSize:13,marginBottom:12}}>
+        ➕ Nueva categoría</button>
+      {showAdd&&(<Crd title={editCat?'Editar categoría':'Nueva categoría'}>
+        <label style={{fontSize:11,color:G.muted}}>Nombre *</label>
+        <input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Blusas" style={iS(G)}/>
+        <label style={{fontSize:11,color:G.muted}}>Tallas (separadas por coma)</label>
+        <input value={tallasStr} onChange={e=>setTallasStr(e.target.value)} placeholder="XS, S, M, L, XL, XXL" style={iS(G)}/>
+        <p style={{fontSize:9,color:G.muted,margin:'-4px 0 8px'}}>Dejar vacío si no aplica (ej: Carteras). Para zapatos: 35, 36, 37, 38...</p>
+        {tallasStr&&(<div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
+          {tallasStr.split(',').map((t,i)=>t.trim()&&<span key={i} style={{padding:'3px 8px',borderRadius:6,background:G.goldSf,color:G.goldDk,fontSize:11,fontWeight:600}}>{t.trim()}</span>)}</div>)}
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={()=>{setShowAdd(false);setEditCat(null)}} style={{flex:1,padding:10,borderRadius:8,border:'1px solid '+G.border,background:'transparent',color:G.muted,fontSize:13,cursor:'pointer'}}>Cancelar</button>
+          <button onClick={guardar} style={{flex:1,padding:10,borderRadius:8,border:'none',background:G.gold,color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>Guardar</button></div>
+      </Crd>)}
+      {cats.map(c=>(<div key={c.id} style={{background:'#fff',borderRadius:10,padding:12,marginBottom:6,border:'1px solid '+G.border}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'start'}}>
+          <div><p style={{fontSize:14,fontWeight:600,margin:0}}>{c.nombre}</p>
+            <p style={{fontSize:10,color:G.muted,margin:'2px 0'}}>{c.tallas?.length?'Tallas: '+c.tallas.join(', '):'Sin tallas'}</p></div>
+          <div style={{display:'flex',gap:4}}>
+            <button onClick={()=>abrir(c)} style={{background:G.goldSf,color:G.goldDk,border:'none',borderRadius:6,padding:'5px 8px',cursor:'pointer',fontSize:10}}>Editar</button>
+            <button onClick={()=>eliminar(c)} style={{background:'#FEE2E2',color:G.err,border:'none',borderRadius:6,padding:'5px 8px',cursor:'pointer',fontSize:10}}>🗑</button>
           </div></div></div>))}
     </div></div>)
 }
