@@ -337,7 +337,7 @@ function RegistrarScreen(P){
   const colsFilt=cols.filter(c=>!colSrch||c.nombre.toLowerCase().includes(colSrch.toLowerCase()))
 
   // Auto nombre
-  useEffect(()=>{if(ep)return;const cat=cats.find(c=>c.id===parseInt(f.categoria_id))
+  useEffect(()=>{const cat=cats.find(c=>c.id===parseInt(f.categoria_id))
     const pts=[cat?.nombre||''];if(f.color)pts.push(f.color)
     if(f.atributos)Object.values(f.atributos).forEach(v=>{if(v)pts.push(v)})
     const a=pts.filter(Boolean).join(' ');if(a)s('nombre',a)},[f.categoria_id,f.color,f.atributos,cats])
