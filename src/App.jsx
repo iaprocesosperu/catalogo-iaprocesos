@@ -337,9 +337,10 @@ function RegistrarScreen(P){
   const colsFilt=cols.filter(c=>!colSrch||c.nombre.toLowerCase().includes(colSrch.toLowerCase()))
 
   // Auto nombre
-  useEffect(()=>{if(ep)return;const pts=[catSel?.nombre||''];if(f.color)pts.push(f.color)
+  useEffect(()=>{if(ep)return;const cat=cats.find(c=>c.id===parseInt(f.categoria_id))
+    const pts=[cat?.nombre||''];if(f.color)pts.push(f.color)
     if(f.atributos)Object.values(f.atributos).forEach(v=>{if(v)pts.push(v)})
-    const a=pts.filter(Boolean).join(' ');if(a&&a!==catSel?.nombre)s('nombre',a)},[f.categoria_id,f.color,f.atributos])
+    const a=pts.filter(Boolean).join(' ');if(a&&a!==(cat?.nombre||''))s('nombre',a)},[f.categoria_id,f.color,f.atributos,cats])
 
   const onOrigenChange=v=>{s('origen_id',v);const o=oris.find(x=>x.id===parseInt(v))
     if(o){if(o.precio_costo_defecto&&!f.precio_costo)s('precio_costo',String(o.precio_costo_defecto))
