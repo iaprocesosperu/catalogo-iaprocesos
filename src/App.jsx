@@ -10,6 +10,10 @@ function blobToBase64(b){return new Promise(r=>{const rd=new FileReader();rd.onl
 const iS=G=>({width:'100%',padding:10,borderRadius:8,border:'1px solid '+G.border,fontSize:14,color:G.text,boxSizing:'border-box',marginBottom:8,background:'#fff'})
 const sS=G=>({width:'100%',padding:10,borderRadius:8,border:'1px solid '+G.border,fontSize:14,marginBottom:8,background:'#fff'})
 
+function downloadPhoto(url,nombre){
+  fetch(url).then(r=>r.blob()).then(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(nombre||'foto')+'.jpg';a.click();URL.revokeObjectURL(a.href)}).catch(()=>{window.open(url,'_blank')})
+}
+
 function exportCSV(data,filename,columns){
   const h=columns.map(c=>c.l).join(',')
   const rows=data.map(r=>columns.map(c=>{let v=typeof c.k==='function'?c.k(r):r[c.k];if(v==null)v='';return '"'+String(v).replace(/"/g,'""')+'"'}).join(','))
@@ -263,6 +267,7 @@ function CatalogoScreen(P){
           <div style={{display:'flex',gap:3,marginTop:5}}>
             <button onClick={()=>{setEditP(p);setScr('registrar')}} style={{flex:1,padding:4,borderRadius:5,border:'1px solid '+G.gold,background:'transparent',color:G.gold,fontSize:9,fontWeight:600,cursor:'pointer'}}>Editar</button>
             <button onClick={()=>{setVentaP(p);setScr('venta')}} disabled={p.cantidad<=0} style={{flex:1,padding:4,borderRadius:5,border:'none',background:p.cantidad>0?G.gold:'#ccc',color:'#fff',fontSize:9,fontWeight:600,cursor:'pointer'}}>Vender</button>
+            {p.foto_url&&<button onClick={()=>downloadPhoto(p.foto_url,p.codigo)} style={{padding:4,borderRadius:5,border:'1px solid '+G.border,background:'transparent',color:G.gold,fontSize:9,cursor:'pointer'}}>📥</button>}
             <button onClick={()=>eliminar(p)} style={{padding:4,borderRadius:5,border:'1px solid #eee',background:'transparent',color:G.err,fontSize:9,cursor:'pointer'}}>🗑</button>
           </div>
         </div>
@@ -287,13 +292,14 @@ function RegistrarScreen(P){
   const[detecting,setDetecting]=useState(false)
   const[cam,setCam]=useState(null)
   const[colSrch,setColSrch]=useState('')
+  const[fileKey,setFileKey]=useState(0)
   const fileRef=useRef(null)
   const s=(k,v)=>setF(p=>({...p,[k]:v}))
   const sA=(k,v)=>setF(p=>({...p,atributos:{...p.atributos,[k]:v}}))
 
   const catSel=cats.find(c=>c.id===parseInt(f.categoria_id))
-  const tallas=catSel?.tallas||[]
-  const attrsDef=catSel?.atributos||[]
+  const tallas=(()=>{const t=catSel?.tallas;if(!t)return[];if(typeof t==='string')try{return JSON.parse(t)}catch{return[]};return Array.isArray(t)?t:[]})()
+  const attrsDef=(()=>{const a=catSel?.atributos;if(!a)return[];if(typeof a==='string')try{return JSON.parse(a)}catch{return[]};return Array.isArray(a)?a:[]})()
   const colsFilt=cols.filter(c=>!colSrch||c.nombre.toLowerCase().includes(colSrch.toLowerCase()))
 
   // Auto nombre
@@ -320,7 +326,7 @@ function RegistrarScreen(P){
   }
   const onFileSelect=e=>{const file=e.target.files?.[0];if(!file)return;setFotoFile(file)
     const r=new FileReader();r.onload=ev=>setFotoPrev(ev.target.result);r.readAsDataURL(file);e.target.value=''}
-  const clearFoto=()=>{setFotoPrev(null);setFotoFile(null);if(fileRef.current)fileRef.current.value=''}
+  const clearFoto=()=>{setFotoPrev(null);setFotoFile(null);setFileKey(k=>k+1)}
 
   // Auto detect from photo
   const autoDetect=async()=>{if(!fotoPrev)return;setDetecting(true)
@@ -342,7 +348,7 @@ function RegistrarScreen(P){
   const guardar=async(yNuevo=false)=>{
     if(!f.codigo||!f.nombre){notify('Código y nombre obligatorios','error');return}
     // Validar código único
-    if(!ep){const{data:dup}=await supabase.from('productos').select('id').eq('empresa_id',eid).eq('codigo',f.codigo).eq('activo',true).limit(1)
+    if(!ep){const{data:dup}=await supabase.from('productos').select('id').eq('empresa_id',eid).eq('codigo',f.codigo).limit(1)
       if(dup?.length>0){notify('Código '+f.codigo+' ya existe','error');return}}
     setSaving(true)
     try{let foto_url=ep?.foto_url||null
@@ -351,8 +357,8 @@ function RegistrarScreen(P){
         codigo:f.codigo,nombre:f.nombre,precio_costo:parseFloat(f.precio_costo)||0,precio_venta:parseFloat(f.precio_venta)||0,
         cantidad:parseInt(f.cantidad)||1,color:f.color,atributos:f.atributos,observacion:f.observacion,foto_url,
         updated_at:new Date().toISOString()}
-      if(ep){await supabase.from('productos').update(data).eq('id',ep.id);notify('Actualizado')}
-      else{await supabase.from('productos').insert(data);notify('Registrado')}
+      if(ep){const{error}=await supabase.from('productos').update(data).eq('id',ep.id);if(error)throw error;notify('Actualizado')}
+      else{const{error}=await supabase.from('productos').insert(data);if(error)throw error;notify('Registrado')}
       await loadAll()
       if(yNuevo){setF(p=>({...p,codigo:'',nombre:'',color:'',cantidad:'1',observacion:'',atributos:{}}));setFotoFile(null);setFotoPrev(null)}
       else setScr('catalogo')
@@ -377,7 +383,10 @@ function RegistrarScreen(P){
       <Crd title="2. Foto del producto">
         {fotoPrev?(<div style={{position:'relative'}}>
           <img src={fotoPrev} alt="" style={{width:'100%',height:180,objectFit:'cover',borderRadius:8}}/>
-          <button onClick={clearFoto} style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,0.5)',color:'#fff',border:'none',borderRadius:16,width:28,height:28,fontSize:14,cursor:'pointer'}}>✕</button>
+          <div style={{position:'absolute',top:6,right:6,display:'flex',gap:4}}>
+            <button onClick={()=>downloadPhoto(fotoPrev,f.codigo)} style={{background:'rgba(0,0,0,0.5)',color:'#fff',border:'none',borderRadius:8,padding:'4px 8px',fontSize:11,cursor:'pointer'}}>📥</button>
+            <button onClick={clearFoto} style={{background:'rgba(0,0,0,0.5)',color:'#fff',border:'none',borderRadius:8,padding:'4px 8px',fontSize:11,cursor:'pointer'}}>🔄 Cambiar</button>
+          </div>
           <button onClick={autoDetect} disabled={detecting} style={{position:'absolute',bottom:6,right:6,background:G.gold,color:'#fff',border:'none',borderRadius:8,padding:'6px 10px',fontSize:11,fontWeight:600,cursor:'pointer'}}>
             {detecting?'⏳':'🔍 Auto-detectar'}</button>
         </div>):(<div style={{display:'flex',gap:8}}>
@@ -386,7 +395,7 @@ function RegistrarScreen(P){
           <button onClick={()=>fileRef.current?.click()} style={{flex:1,padding:18,borderRadius:8,border:'2px dashed '+G.border,background:G.goldLt,cursor:'pointer',textAlign:'center'}}>
             <span style={{fontSize:22,display:'block'}}>📁</span><span style={{fontSize:11,color:G.muted,fontWeight:600}}>Galería</span></button>
         </div>)}
-        <input ref={fileRef} type="file" accept="image/*" onChange={onFileSelect} style={{display:'none'}}/>
+        <input key={fileKey} ref={fileRef} type="file" accept="image/*" onChange={onFileSelect} style={{display:'none'}}/>
       </Crd>
       {/* Datos */}
       <Crd title="3. Datos">
@@ -582,12 +591,9 @@ function VentaScreen(P){
           <p style={{fontSize:11,color:G.muted}}>Stock: {prod.cantidad} • Costo: S/{prod.precio_costo}</p></div>
       </div></Crd>
       <Crd title="Precio de Venta">
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span style={{fontSize:16,fontWeight:700,color:G.muted}}>S/</span>
-          <input value={precio} onChange={e=>setPrecio(e.target.value)} type="text" inputMode="decimal"
-            style={{flex:1,padding:12,borderRadius:8,border:'2px solid '+G.gold,fontSize:24,fontWeight:700,textAlign:'center',boxSizing:'border-box'}}/>
-        </div>
-        {parseFloat(precio)!==prod.precio_venta&&<p style={{fontSize:10,color:G.warn,margin:'4px 0 0'}}>Original: S/{prod.precio_venta}</p>}
+        <input value={precio} onChange={e=>setPrecio(e.target.value)} type="text" inputMode="decimal"
+          style={{width:'100%',padding:14,borderRadius:8,border:'2px solid '+G.gold,fontSize:28,fontWeight:700,textAlign:'center',boxSizing:'border-box',background:'#fff'}}/>
+        {parseFloat(precio)!==prod.precio_venta&&<p style={{fontSize:10,color:G.warn,margin:'6px 0 0',textAlign:'center'}}>Original: S/{prod.precio_venta}</p>}
       </Crd>
       <Crd title="Cantidad">
         <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:16}}>
@@ -754,13 +760,17 @@ function CatsScr(P){
   const[nombre,setNombre]=useState('')
   const[tallasStr,setTallasStr]=useState('')
 
-  const abrir=c=>{if(c){setEditCat(c);setNombre(c.nombre);setTallasStr((c.tallas||[]).join(', '))}
+  const abrir=c=>{if(c){setEditCat(c);setNombre(c.nombre)
+    const t=c.tallas;const arr=!t?[]:typeof t==='string'?(() => {try{return JSON.parse(t)}catch{return[]}})():Array.isArray(t)?t:[]
+    setTallasStr(arr.join(', '))}
     else{setEditCat(null);setNombre('');setTallasStr('')};setShowAdd(true)}
 
   const guardar=async()=>{if(!nombre.trim()){notify('Nombre obligatorio','error');return}
     const tallas=tallasStr?tallasStr.split(',').map(t=>t.trim()).filter(Boolean):[]
-    if(editCat){await supabase.from('categorias').update({nombre:nombre.trim(),tallas}).eq('id',editCat.id);notify('Actualizado')}
-    else{await supabase.from('categorias').insert({empresa_id:eid,linea_id:lid,nombre:nombre.trim(),tallas,atributos:[]});notify('Agregado')}
+    if(editCat){const{error}=await supabase.from('categorias').update({nombre:nombre.trim(),tallas:tallas}).eq('id',editCat.id)
+      if(error){notify('Error: '+error.message,'error');return};notify('Actualizado')}
+    else{const{error}=await supabase.from('categorias').insert({empresa_id:eid,linea_id:lid,nombre:nombre.trim(),tallas:tallas,atributos:[]})
+      if(error){notify('Error: '+error.message,'error');return};notify('Agregado')}
     setShowAdd(false);setEditCat(null);await loadAll()}
 
   const eliminar=async c=>{if(!confirm('¿Eliminar '+c.nombre+'?'))return
