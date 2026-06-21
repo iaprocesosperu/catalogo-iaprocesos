@@ -14,6 +14,34 @@ function downloadPhoto(url,nombre){
   fetch(url).then(r=>r.blob()).then(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(nombre||'foto')+'.jpg';a.click();URL.revokeObjectURL(a.href)}).catch(()=>{window.open(url,'_blank')})
 }
 
+function generarCatalogoPDF(productos,empresa,linea){
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Catálogo ${empresa} - ${linea}</title>
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui;padding:20px;background:#fff}
+  h1{text-align:center;color:#C5A55A;font-size:22px;margin-bottom:4px}
+  .sub{text-align:center;color:#666;font-size:12px;margin-bottom:20px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .card{border:1px solid #E8E3D8;border-radius:10px;overflow:hidden;break-inside:avoid}
+  .card img{width:100%;height:120px;object-fit:cover}
+  .card .noimg{width:100%;height:120px;background:#F9F5EB;display:flex;align-items:center;justify-content:center;font-size:30px;opacity:0.3}
+  .info{padding:8px}
+  .code{font-size:9px;background:#F0E8D0;color:#A8893E;padding:2px 6px;border-radius:4px;font-weight:600;display:inline-block}
+  .price{font-size:16px;font-weight:800;color:#C5A55A;float:right}
+  .name{font-size:11px;font-weight:600;margin:4px 0 2px;clear:both}
+  .detail{font-size:9px;color:#666}
+  .stock{font-size:9px;color:#10B981;font-weight:600}
+  @media print{.grid{grid-template-columns:repeat(3,1fr)}.card{break-inside:avoid}body{padding:10px}}
+  </style></head><body>
+  <h1>📦 ${empresa}</h1><p class="sub">${linea} — ${new Date().toLocaleDateString('es-PE')} — ${productos.length} productos con stock</p>
+  <div class="grid">${productos.filter(p=>p.cantidad>0).map(p=>`<div class="card">
+    ${p.foto_url?`<img src="${p.foto_url}" alt="">`:'<div class="noimg">📦</div>'}
+    <div class="info"><span class="code">${p.codigo}</span><span class="price">S/${p.precio_venta}</span>
+    <p class="name">${p.nombre}</p>
+    <p class="detail">${[p.color,p.atributos?.talla,p.atributos?.genero].filter(Boolean).join(' • ')}</p>
+    <p class="stock">Stock: ${p.cantidad}</p></div></div>`).join('')}</div></body></html>`
+  const w=window.open('','_blank');w.document.write(html);w.document.close()
+  setTimeout(()=>w.print(),500)
+}
+
 function exportCSV(data,filename,columns){
   const h=columns.map(c=>c.l).join(',')
   const rows=data.map(r=>columns.map(c=>{let v=typeof c.k==='function'?c.k(r):r[c.k];if(v==null)v='';return '"'+String(v).replace(/"/g,'""')+'"'}).join(','))
@@ -242,6 +270,7 @@ function CatalogoScreen(P){
         <div><p style={{color:'rgba(255,255,255,0.8)',fontSize:10,margin:0}}>{P.emp?.nombre}</p>
           <h1 style={{color:'#fff',fontSize:18,fontWeight:800,margin:0}}>📦 Catálogo</h1></div>
         <div style={{display:'flex',gap:6}}>
+          <button onClick={()=>generarCatalogoPDF(fl,P.emp?.nombre,P.linAct?.nombre)} style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:8,padding:'6px 10px',color:'#fff',fontSize:11,cursor:'pointer'}}>📄 PDF</button>
           <button onClick={exportar} style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:8,padding:'6px 10px',color:'#fff',fontSize:11,cursor:'pointer'}}>📥</button>
           <button onClick={logout} style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:8,padding:'6px 10px',color:'#fff',fontSize:11,cursor:'pointer'}}>Salir</button>
         </div>
@@ -293,6 +322,11 @@ function RegistrarScreen(P){
   const[cam,setCam]=useState(null)
   const[colSrch,setColSrch]=useState('')
   const[fileKey,setFileKey]=useState(0)
+  const[showNewCat,setShowNewCat]=useState(false)
+  const[newCatName,setNewCatName]=useState('')
+  const[newCatTallas,setNewCatTallas]=useState('')
+  const[showNewCol,setShowNewCol]=useState(false)
+  const[newColName,setNewColName]=useState('')
   const fileRef=useRef(null)
   const s=(k,v)=>setF(p=>({...p,[k]:v}))
   const sA=(k,v)=>setF(p=>({...p,atributos:{...p.atributos,[k]:v}}))
@@ -327,6 +361,17 @@ function RegistrarScreen(P){
   const onFileSelect=e=>{const file=e.target.files?.[0];if(!file)return;setFotoFile(file)
     const r=new FileReader();r.onload=ev=>setFotoPrev(ev.target.result);r.readAsDataURL(file);e.target.value=''}
   const clearFoto=()=>{setFotoPrev(null);setFotoFile(null);setFileKey(k=>k+1)}
+
+  const crearCatRapido=async()=>{if(!newCatName.trim())return
+    const tallas=newCatTallas?newCatTallas.split(',').map(t=>t.trim()).filter(Boolean):[]
+    const{data,error}=await supabase.from('categorias').insert({empresa_id:eid,linea_id:lid,nombre:newCatName.trim(),tallas,atributos:[]}).select().single()
+    if(error){notify('Error: '+error.message,'error');return}
+    await loadAll();s('categoria_id',String(data.id));setShowNewCat(false);setNewCatName('');setNewCatTallas('');notify('Categoría creada')}
+
+  const crearColRapido=async()=>{if(!newColName.trim())return
+    const{error}=await supabase.from('colores').insert({empresa_id:eid,nombre:newColName.trim()})
+    if(error){notify('Error: '+error.message,'error');return}
+    await loadAll();s('color',newColName.trim());setColSrch('');setShowNewCol(false);setNewColName('');notify('Color creado')}
 
   // Auto detect from photo
   const autoDetect=async()=>{if(!fotoPrev)return;setDetecting(true)
@@ -404,7 +449,15 @@ function RegistrarScreen(P){
           <option value="">Seleccionar origen</option>
           {oris.map(o=><option key={o.id} value={o.id}>{o.nombre}{o.precio_venta_defecto?' (C:'+o.precio_costo_defecto+' V:'+o.precio_venta_defecto+')':''}</option>)}
         </select>
-        <label style={{fontSize:11,color:G.muted}}>Categoría</label>
+        <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:2}}>
+          <label style={{fontSize:11,color:G.muted}}>Categoría</label>
+          <button onClick={()=>setShowNewCat(!showNewCat)} style={{fontSize:10,color:G.gold,background:'none',border:'none',cursor:'pointer',fontWeight:700}}>+ Nueva</button>
+        </div>
+        {showNewCat&&(<div style={{background:G.goldLt,borderRadius:8,padding:10,marginBottom:8}}>
+          <input value={newCatName} onChange={e=>setNewCatName(e.target.value)} placeholder="Nombre categoría" style={iS(G)}/>
+          <input value={newCatTallas} onChange={e=>setNewCatTallas(e.target.value)} placeholder="Tallas: XS, S, M, L (vacío si no aplica)" style={iS(G)}/>
+          <button onClick={crearCatRapido} disabled={!newCatName.trim()} style={{width:'100%',padding:8,borderRadius:6,border:'none',background:newCatName.trim()?G.gold:'#ccc',color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer'}}>Crear y seleccionar</button>
+        </div>)}
         <select value={f.categoria_id} onChange={e=>s('categoria_id',e.target.value)} style={sS(G)}>
           <option value="">Seleccionar</option>{cats.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
         {tallas.length>0&&(<><label style={{fontSize:11,color:G.muted}}>Talla</label>
@@ -420,7 +473,14 @@ function RegistrarScreen(P){
           <div style={{display:'flex',gap:6,marginBottom:8}}>
             {['Mujer','Hombre','Unisex'].map(g=><button key={g} onClick={()=>sA('genero',g)} style={{flex:1,padding:7,borderRadius:6,border:'none',fontSize:12,fontWeight:600,cursor:'pointer',
               background:f.atributos?.genero===g?G.gold:G.goldSf,color:f.atributos?.genero===g?'#fff':G.goldDk}}>{g}</button>)}</div></>)}
-        <label style={{fontSize:11,color:G.muted}}>Color</label>
+        <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:2}}>
+          <label style={{fontSize:11,color:G.muted}}>Color</label>
+          <button onClick={()=>setShowNewCol(!showNewCol)} style={{fontSize:10,color:G.gold,background:'none',border:'none',cursor:'pointer',fontWeight:700}}>+ Nuevo</button>
+        </div>
+        {showNewCol&&(<div style={{display:'flex',gap:6,marginBottom:8}}>
+          <input value={newColName} onChange={e=>setNewColName(e.target.value)} placeholder="Nuevo color" style={{flex:1,...iS(G),marginBottom:0}}/>
+          <button onClick={crearColRapido} disabled={!newColName.trim()} style={{padding:'8px 12px',borderRadius:8,border:'none',background:newColName.trim()?G.gold:'#ccc',color:'#fff',fontSize:11,fontWeight:600,cursor:'pointer'}}>Crear</button>
+        </div>)}
         <input value={f.color} onChange={e=>{s('color',e.target.value);setColSrch(e.target.value)}} placeholder="Escribe..." style={iS(G)}/>
         {colSrch&&colsFilt.length>0&&(<div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
           {colsFilt.slice(0,8).map(c=><button key={c.id} onClick={()=>{s('color',c.nombre);setColSrch('')}}
