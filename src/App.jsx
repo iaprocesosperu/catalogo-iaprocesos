@@ -340,7 +340,7 @@ function RegistrarScreen(P){
   useEffect(()=>{if(ep)return;const cat=cats.find(c=>c.id===parseInt(f.categoria_id))
     const pts=[cat?.nombre||''];if(f.color)pts.push(f.color)
     if(f.atributos)Object.values(f.atributos).forEach(v=>{if(v)pts.push(v)})
-    const a=pts.filter(Boolean).join(' ');if(a&&a!==(cat?.nombre||''))s('nombre',a)},[f.categoria_id,f.color,f.atributos,cats])
+    const a=pts.filter(Boolean).join(' ');if(a)s('nombre',a)},[f.categoria_id,f.color,f.atributos,cats])
 
   const onOrigenChange=v=>{s('origen_id',v);const o=oris.find(x=>x.id===parseInt(v))
     if(o){if(o.precio_costo_defecto&&!f.precio_costo)s('precio_costo',String(o.precio_costo_defecto))
@@ -457,7 +457,10 @@ function RegistrarScreen(P){
         {showNewCat&&(<div style={{background:G.goldLt,borderRadius:8,padding:10,marginBottom:8}}>
           <input value={newCatName} onChange={e=>setNewCatName(e.target.value)} placeholder="Nombre categoría" style={iS(G)}/>
           <input value={newCatTallas} onChange={e=>setNewCatTallas(e.target.value)} placeholder="Tallas: XS, S, M, L (vacío si no aplica)" style={iS(G)}/>
-          <button onClick={crearCatRapido} disabled={!newCatName.trim()} style={{width:'100%',padding:8,borderRadius:6,border:'none',background:newCatName.trim()?G.gold:'#ccc',color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer'}}>Crear y seleccionar</button>
+          <div style={{display:'flex',gap:6}}>
+            <button onClick={()=>{setShowNewCat(false);setNewCatName('');setNewCatTallas('')}} style={{flex:1,padding:8,borderRadius:6,border:'1px solid '+G.border,background:'transparent',color:G.muted,fontSize:12,cursor:'pointer'}}>Cancelar</button>
+            <button onClick={crearCatRapido} disabled={!newCatName.trim()} style={{flex:1,padding:8,borderRadius:6,border:'none',background:newCatName.trim()?G.gold:'#ccc',color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer'}}>Crear y seleccionar</button>
+          </div>
         </div>)}
         <select value={f.categoria_id} onChange={e=>s('categoria_id',e.target.value)} style={sS(G)}>
           <option value="">Seleccionar</option>{cats.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
@@ -481,6 +484,7 @@ function RegistrarScreen(P){
         {showNewCol&&(<div style={{display:'flex',gap:6,marginBottom:8}}>
           <input value={newColName} onChange={e=>setNewColName(e.target.value)} placeholder="Nuevo color" style={{flex:1,...iS(G),marginBottom:0}}/>
           <button onClick={crearColRapido} disabled={!newColName.trim()} style={{padding:'8px 12px',borderRadius:8,border:'none',background:newColName.trim()?G.gold:'#ccc',color:'#fff',fontSize:11,fontWeight:600,cursor:'pointer'}}>Crear</button>
+          <button onClick={()=>{setShowNewCol(false);setNewColName('')}} style={{padding:'8px 10px',borderRadius:8,border:'1px solid '+G.border,background:'transparent',color:G.muted,fontSize:11,cursor:'pointer'}}>✕</button>
         </div>)}
         <input value={f.color} onChange={e=>{s('color',e.target.value);setColSrch(e.target.value)}} placeholder="Escribe..." style={iS(G)}/>
         {colSrch&&colsFilt.length>0&&(<div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
