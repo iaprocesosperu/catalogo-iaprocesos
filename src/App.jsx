@@ -467,8 +467,8 @@ function RegistrarScreen(P){
   },[])
 
   const catSel=cats.find(c=>c.id===parseInt(f.categoria_id))
-  const tallas=(()=>{const t=catSel?.tallas;if(!t)return[];if(typeof t==='string')try{return JSON.parse(t)}catch{return[]};return Array.isArray(t)?t:[]}())
-  const attrsDef=(()=>{const a=catSel?.atributos;if(!a)return[];if(typeof a==='string')try{return JSON.parse(a)}catch{return[]};return Array.isArray(a)?a:[]}())
+  const tallas=(()=>{const t=catSel?.tallas;if(!t)return[];if(typeof t==='string')try{return JSON.parse(t)}catch(e){return[]};return Array.isArray(t)?t:[]}())
+  const attrsDef=(()=>{const a=catSel?.atributos;if(!a)return[];if(typeof a==='string')try{return JSON.parse(a)}catch(e){return[]};return Array.isArray(a)?a:[]}())
   const colsFilt=cols.filter(c=>!colSrch||c.nombre.toLowerCase().includes(colSrch.toLowerCase()))
 
   /* auto nombre */
@@ -1034,7 +1034,7 @@ function CatsScr(P){
   const[tallasStr,setTallasStr]=useState('')
 
   const abrir=c=>{if(c){setEditCat(c);setNombre(c.nombre)
-    const t=c.tallas;const arr=!t?[]:typeof t==='string'?(()=>{try{return JSON.parse(t)}catch{return[]}})():Array.isArray(t)?t:[]
+    const t=c.tallas;const arr=!t?[]:typeof t==='string'?(()=>{try{return JSON.parse(t)}catch(e){return[]}})():Array.isArray(t)?t:[]
     setTallasStr(arr.join(', '))}
     else{setEditCat(null);setNombre('');setTallasStr('')};setShowAdd(true)}
 
