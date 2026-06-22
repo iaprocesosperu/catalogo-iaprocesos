@@ -14,32 +14,149 @@ function downloadPhoto(url,nombre){
   fetch(url).then(r=>r.blob()).then(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(nombre||'foto')+'.jpg';a.click();URL.revokeObjectURL(a.href)}).catch(()=>{window.open(url,'_blank')})
 }
 
-function generarCatalogoPDF(productos,empresa,linea){
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Catálogo ${empresa} - ${linea}</title>
-  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui;padding:20px;background:#fff}
-  h1{text-align:center;color:#C5A55A;font-size:22px;margin-bottom:4px}
-  .sub{text-align:center;color:#666;font-size:12px;margin-bottom:20px}
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-  .card{border:1px solid #E8E3D8;border-radius:10px;overflow:hidden;break-inside:avoid}
-  .card img{width:100%;height:120px;object-fit:cover}
-  .card .noimg{width:100%;height:120px;background:#F9F5EB;display:flex;align-items:center;justify-content:center;font-size:30px;opacity:0.3}
-  .info{padding:8px}
-  .code{font-size:9px;background:#F0E8D0;color:#A8893E;padding:2px 6px;border-radius:4px;font-weight:600;display:inline-block}
-  .price{font-size:16px;font-weight:800;color:#C5A55A;float:right}
-  .name{font-size:11px;font-weight:600;margin:4px 0 2px;clear:both}
-  .detail{font-size:9px;color:#666}
-  .stock{font-size:9px;color:#10B981;font-weight:600}
-  @media print{.grid{grid-template-columns:repeat(3,1fr)}.card{break-inside:avoid}body{padding:10px}}
-  </style></head><body>
-  <h1>📦 ${empresa}</h1><p class="sub">${linea} — ${new Date().toLocaleDateString('es-PE')} — ${productos.length} productos con stock</p>
-  <div class="grid">${productos.filter(p=>p.cantidad>0).map(p=>`<div class="card">
-    ${p.foto_url?`<img src="${p.foto_url}" alt="">`:'<div class="noimg">📦</div>'}
-    <div class="info"><span class="code">${p.codigo}</span><span class="price">S/${p.precio_venta}</span>
-    <p class="name">${p.nombre}</p>
-    <p class="detail">${[p.color,p.atributos?.talla,p.atributos?.genero].filter(Boolean).join(' • ')}</p>
-    <p class="stock">Stock: ${p.cantidad}</p></div></div>`).join('')}</div></body></html>`
-  const w=window.open('','_blank');w.document.write(html);w.document.close()
-  setTimeout(()=>w.print(),500)
+/* ═══ PDF POR FICHAS — una página por producto ═══ */
+function generarCatalogoPDF(productos, empresa, linea){
+  const prods=productos.filter(p=>p.cantidad>0)
+  if(!prods.length){alert('No hay productos con stock para generar el catálogo');return}
+
+  const nom=empresa?.nombre||''
+  const slo=empresa?.slogan||'Aquí todo es barato'
+  const dir=empresa?.direccion||''
+  const wa=empresa?.whatsapp||''
+
+  const logo=(w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 64 60" xmlns="http://www.w3.org/2000/svg"><path d="M32,3 L59,25 L54,25 L54,54 L10,54 L10,25 L5,25 Z" fill="none" stroke="#C5A55A" stroke-width="3" stroke-linejoin="round"/><rect x="22" y="23" width="20" height="14" rx="3" fill="#C5A55A" opacity="0.85"/><path d="M25,23 Q32,15 39,23" fill="none" stroke="#C5A55A" stroke-width="2.5"/><rect x="25" y="38" width="14" height="16" rx="2" fill="#C5A55A" opacity="0.65"/></svg>`
+
+  const cover=`<div class="page cover">
+    <div class="cover-body">
+      <div class="cover-logo">${logo(60,58)}</div>
+      <h1 class="cover-title">${nom}</h1>
+      <p class="cover-slogan">${slo}</p>
+      <div class="cover-badge"><span>&#128722;</span> CAT&Aacute;LOGO DE PRODUCTOS</div>
+      <div class="cover-features">
+        <div class="feat"><div class="feat-ico">&#127991;</div><p>PRECIOS<br>BAJOS</p></div>
+        <div class="feat"><div class="feat-ico">&#10003;</div><p>CALIDAD<br>GARANTIZADA</p></div>
+        <div class="feat"><div class="feat-ico">&#128722;</div><p>VARIEDAD<br>PARA TODOS</p></div>
+        <div class="feat"><div class="feat-ico">&#9786;</div><p>ATENCI&Oacute;N<br>AMIGABLE</p></div>
+      </div>
+    </div>
+    <svg class="wave-svg" viewBox="0 0 210 28" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0,28 C35,4 70,24 105,14 C140,4 175,22 210,8 L210,28 Z" fill="#1A1A1A"/>
+    </svg>
+    <div class="cover-dark">
+      <div class="year-circle"><span class="y-num">2026</span><span class="y-txt">EDICI&Oacute;N</span></div>
+    </div>
+    <div class="cover-foot">
+      <div class="cf-col"><span class="cf-lbl">DIRECCI&Oacute;N:</span><span>${dir}</span></div>
+      <div class="cf-sep"></div>
+      <div class="cf-col cf-right"><span class="cf-lbl">WHATSAPP:</span><span class="cf-wa">${wa}</span></div>
+    </div>
+  </div>`
+
+  const pages=prods.map((p,i)=>{
+    const num=String(i+1).padStart(3,'0')
+    const genero=p.atributos?.genero||''
+    const talla=p.atributos?.talla||''
+    const color=p.color||''
+    const subcat=p.categorias?.nombre||''
+
+    let attrsHTML=''
+    if(genero)attrsHTML+=`<div class="arow"><div class="aico">&#128100;</div><div class="atxt"><span class="albl">G&Eacute;NERO:</span><span class="aval">${genero.toUpperCase()}</span></div></div>`
+    if(talla)attrsHTML+=`<div class="arow"><div class="aico">&#128085;</div><div class="atxt"><span class="albl">TALLA:</span><span class="aval">${talla}</span></div></div>`
+    if(color)attrsHTML+=`<div class="arow"><div class="aico">&#127912;</div><div class="atxt"><span class="albl">COLOR:</span><span class="aval">${color.toUpperCase()}</span></div></div>`
+    if(p.atributos){Object.entries(p.atributos).filter(([k,v])=>k!=='genero'&&k!=='talla'&&v).forEach(([k,v])=>{attrsHTML+=`<div class="arow"><div class="aico">&#9642;</div><div class="atxt"><span class="albl">${k.toUpperCase()}:</span><span class="aval">${String(v).toUpperCase()}</span></div></div>`})}
+
+    return `<div class="page product">
+      <div class="ph">
+        <div class="ph-line"></div>
+        <div class="ph-center">${logo(28,27)}<h2>${nom}</h2><p>${slo}</p></div>
+        <div class="ph-line"></div>
+      </div>
+      <div class="photo-area">
+        <div class="num-badge">${num}</div>
+        ${p.foto_url?`<img src="${p.foto_url}" alt="">`:'<div class="no-foto"><p>'+(p.nombre||'').toUpperCase()+'</p><p>Sin foto</p></div>'}
+      </div>
+      <div class="pinfo">
+        <h3 class="pname">${(p.nombre||'').toUpperCase()}</h3>
+        ${subcat?`<p class="pcat">${subcat.toUpperCase()}</p>`:''}
+      </div>
+      <div class="attrs-wrap">${attrsHTML}</div>
+      <div class="price-wrap">
+        <div class="pgold">S/${p.precio_venta}</div>
+        <div class="pblk">PRECIO</div>
+      </div>
+      <div class="pfoot">
+        <div class="pf-col"><p class="pf-lbl">DIRECCI&Oacute;N:</p><p>${dir}</p></div>
+        <div class="pf-sep"></div>
+        <div class="pf-col pf-right"><p class="pf-lbl">WHATSAPP:</p><p class="pf-wa">${wa}</p></div>
+      </div>
+      <div class="brand-bar">&#8212; ${nom} &#8212; &nbsp; ${slo}</div>
+    </div>`
+  }).join('')
+
+  const css=`*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#e0e0e0}
+@page{size:A4 portrait;margin:0}
+@media print{body{background:#fff}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.page{margin:0!important;box-shadow:none!important;page-break-after:always;page-break-inside:avoid}}
+.page{width:210mm;min-height:297mm;background:#fff;display:flex;flex-direction:column;margin:14px auto;box-shadow:0 4px 28px rgba(0,0,0,0.18);overflow:hidden;position:relative}
+/* COVER */
+.cover-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 30px 12px;gap:14px}
+.cover-logo{margin-bottom:2px}
+.cover-title{font-size:50px;font-weight:900;color:#C5A55A;text-align:center;text-transform:uppercase;line-height:1.05;letter-spacing:-1px}
+.cover-slogan{font-family:Georgia,serif;font-style:italic;font-size:19px;color:#666;margin-top:-4px}
+.cover-badge{background:#C5A55A;color:#fff;font-size:16px;font-weight:800;padding:11px 28px;border-radius:8px;display:flex;align-items:center;gap:10px;letter-spacing:0.5px}
+.cover-features{display:flex;gap:18px;margin-top:6px}
+.feat{display:flex;flex-direction:column;align-items:center;gap:6px;width:70px}
+.feat-ico{width:50px;height:50px;border-radius:50%;border:2.5px solid #C5A55A;display:flex;align-items:center;justify-content:center;font-size:20px}
+.feat p{font-size:8px;font-weight:700;color:#444;text-align:center;line-height:1.35}
+.wave-svg{display:block;width:100%;height:28px;background:#fff;flex-shrink:0}
+.cover-dark{background:#1A1A1A;padding:12px 30px 14px;display:flex;align-items:center;justify-content:flex-end;flex-shrink:0}
+.year-circle{width:78px;height:78px;background:#C5A55A;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:3px solid #fff}
+.y-num{font-size:22px;font-weight:900;color:#fff;line-height:1}
+.y-txt{font-size:8px;font-weight:700;color:#fff;letter-spacing:1.5px}
+.cover-foot{background:#1A1A1A;border-top:2.5px solid #C5A55A;display:flex;align-items:center;padding:12px 24px;color:#fff;font-size:10px;flex-shrink:0}
+.cf-col{flex:1;display:flex;flex-direction:column;gap:2px}
+.cf-right{align-items:flex-end}
+.cf-sep{width:1px;background:rgba(255,255,255,0.25);height:30px;margin:0 20px;flex-shrink:0}
+.cf-lbl{color:#C5A55A;font-weight:700;font-size:9px}
+.cf-wa{font-size:16px;font-weight:800}
+/* PRODUCT PAGE */
+.ph{display:flex;align-items:center;padding:10px 20px;gap:12px;border-bottom:1px solid #E8E3D8;flex-shrink:0}
+.ph-line{flex:1;height:1px;background:#C5A55A;opacity:0.55}
+.ph-center{display:flex;flex-direction:column;align-items:center;gap:1px}
+.ph-center h2{font-size:10px;font-weight:800;color:#C5A55A;text-transform:uppercase;letter-spacing:0.5px}
+.ph-center p{font-size:7px;color:#999;font-family:Georgia,serif;font-style:italic}
+.photo-area{flex:1;background:#F9F5EB;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:110mm}
+.photo-area img{max-width:86%;max-height:86%;object-fit:contain}
+.no-foto{display:flex;flex-direction:column;align-items:center;gap:10px;color:#C5A55A;opacity:0.35}
+.no-foto p:first-child{font-size:18px;font-weight:800;text-align:center;padding:0 20px}
+.no-foto p:last-child{font-size:12px}
+.num-badge{position:absolute;top:0;left:0;background:#C5A55A;color:#fff;font-size:18px;font-weight:800;padding:7px 15px;letter-spacing:2px;z-index:2}
+.pinfo{padding:12px 22px 4px;background:#fff;flex-shrink:0}
+.pname{font-size:24px;font-weight:900;color:#1F2937;text-transform:uppercase;line-height:1.1}
+.pcat{font-size:15px;font-weight:700;color:#C5A55A;margin-top:2px;text-transform:uppercase}
+.attrs-wrap{padding:2px 22px 4px;background:#fff;flex-shrink:0}
+.arow{display:flex;align-items:center;padding:5px 0;border-bottom:1px solid #F0EBE0;gap:10px}
+.aico{width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.atxt{flex:1}
+.albl{display:block;font-size:8px;color:#6B7280;font-weight:600}
+.aval{display:block;font-size:12px;font-weight:700;color:#1F2937}
+.price-wrap{margin:8px 22px 6px;border-radius:10px;overflow:hidden;text-align:center;flex-shrink:0}
+.pgold{background:#C5A55A;color:#fff;font-size:40px;font-weight:900;padding:10px}
+.pblk{background:#1A1A1A;color:#fff;font-size:11px;font-weight:700;padding:5px;letter-spacing:2px}
+.pfoot{background:#1A1A1A;display:flex;padding:9px 20px;flex-shrink:0}
+.pf-col{flex:1;color:#fff;font-size:8.5px;line-height:1.6}
+.pf-right{text-align:right}
+.pf-lbl{color:#C5A55A;font-weight:700;font-size:7.5px}
+.pf-wa{font-size:14px;font-weight:800}
+.pf-sep{width:1px;background:rgba(255,255,255,0.2);margin:0 14px;flex-shrink:0}
+.brand-bar{background:#0D0D0D;color:#C5A55A;font-size:7.5px;text-align:center;padding:4px;font-style:italic;flex-shrink:0}`
+
+  const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Cat\u00e1logo ${nom} \u2014 ${linea||''}</title><style>${css}</style></head><body>${cover}${pages}</body></html>`
+  const w=window.open('','_blank')
+  if(!w){alert('Permite ventanas emergentes para generar el PDF');return}
+  w.document.write(html)
+  w.document.close()
+  setTimeout(()=>w.print(),900)
 }
 
 function exportCSV(data,filename,columns){
@@ -94,11 +211,9 @@ export default function App(){
   const [notif,setNotif]=useState(null)
   const [editP,setEditP]=useState(null)
   const [ventaP,setVentaP]=useState(null)
-  const [shareImg,setShareImg]=useState(null)
 
-  const notify=(m,t='success')=>{setNotif({m,t});setTimeout(()=>setNotif(null),3000)}
+  const notify=(m,t='success')=>{setNotif({m,t});setTimeout(()=>setNotif(null),3500)}
 
-  // Back button handling
   useEffect(()=>{
     const h=()=>{if(scr!=='catalogo'&&scr!=='access'){setScr('catalogo')}else{window.history.pushState(null,'',window.location.href)}}
     window.history.pushState(null,'',window.location.href)
@@ -106,7 +221,6 @@ export default function App(){
     return()=>window.removeEventListener('popstate',h)
   },[scr])
 
-  // PWA share target
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search)
     if(params.get('share')==='true'){setScr('registrar')}
@@ -143,13 +257,13 @@ export default function App(){
   const tit=`${emp?.nombre||''} › ${linAct?.nombre||''}`
   const cF=cats.filter(c=>c.linea_id===lid),oF=oris.filter(o=>o.linea_id===lid),pF=prods.filter(p=>p.linea_id===lid)
   const P={emp,eid,lid,tit,lineas,linAct,setLinAct,cats:cF,oris:oF,cols,prods:pF,allProds:prods,clis,vents,
-    notify,loadAll,scr,setScr,setEditP,setVentaP,logout,G,shareImg}
+    notify,loadAll,scr,setScr,setEditP,setVentaP,logout,G}
 
   return(
     <div style={{maxWidth:480,margin:'0 auto',minHeight:'100vh',background:G.bg,position:'relative',paddingBottom:68}}>
-      {notif&&<div style={{position:'fixed',top:12,left:'50%',transform:'translateX(-50%)',zIndex:999,
+      {notif&&<div style={{position:'fixed',top:12,left:'50%',transform:'translateX(-50%)',zIndex:10000,
         background:notif.t==='success'?G.ok:G.err,color:'#fff',padding:'10px 20px',borderRadius:12,fontSize:14,fontWeight:600,
-        boxShadow:'0 4px 15px rgba(0,0,0,0.2)',zIndex:10000}}>{notif.m}</div>}
+        boxShadow:'0 4px 15px rgba(0,0,0,0.2)'}}>{notif.m}</div>}
       {scr==='access'&&<AccessScreen login={loginKey} loading={loading}/>}
       {scr==='catalogo'&&<CatalogoScreen {...P}/>}
       {scr==='registrar'&&<RegistrarScreen {...P} editP={editP}/>}
@@ -242,7 +356,7 @@ function VoiceBtn({onResult}){
 
 /* ═══ CATÁLOGO ═══ */
 function CatalogoScreen(P){
-  const{tit,lineas,linAct,setLinAct,prods,allProds,setScr,setEditP,setVentaP,logout,notify}=P
+  const{tit,lineas,linAct,setLinAct,prods,allProds,setScr,setEditP,setVentaP,logout,notify,emp}=P
   const[f,setF]=useState('')
   const fl=prods.filter(p=>!f||p.nombre?.toLowerCase().includes(f.toLowerCase())||p.codigo?.toLowerCase().includes(f.toLowerCase()))
 
@@ -267,10 +381,11 @@ function CatalogoScreen(P){
   return(<div>
     <div style={{background:G.gold,padding:'16px 16px 20px'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-        <div><p style={{color:'rgba(255,255,255,0.8)',fontSize:10,margin:0}}>{P.emp?.nombre}</p>
+        <div><p style={{color:'rgba(255,255,255,0.8)',fontSize:10,margin:0}}>{emp?.nombre}</p>
           <h1 style={{color:'#fff',fontSize:18,fontWeight:800,margin:0}}>📦 Catálogo</h1></div>
         <div style={{display:'flex',gap:6}}>
-          <button onClick={()=>generarCatalogoPDF(fl,P.emp?.nombre,P.linAct?.nombre)} style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:8,padding:'6px 10px',color:'#fff',fontSize:11,cursor:'pointer'}}>📄 PDF</button>
+          <button onClick={()=>generarCatalogoPDF(fl,emp,linAct?.nombre)}
+            style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:8,padding:'6px 10px',color:'#fff',fontSize:11,cursor:'pointer'}}>📄 PDF</button>
           <button onClick={exportar} style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:8,padding:'6px 10px',color:'#fff',fontSize:11,cursor:'pointer'}}>📥</button>
           <button onClick={logout} style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:8,padding:'6px 10px',color:'#fff',fontSize:11,cursor:'pointer'}}>Salir</button>
         </div>
@@ -307,8 +422,9 @@ function CatalogoScreen(P){
 
 /* ═══ REGISTRAR ═══ */
 function RegistrarScreen(P){
-  const{eid,lid,tit,cats,oris,cols,notify,loadAll,setScr,editP}=P
+  const{eid,lid,tit,cats,oris,cols,notify,loadAll,setScr,editP,emp}=P
   const ep=editP
+
   const[f,setF]=useState(ep?{codigo:ep.codigo||'',nombre:ep.nombre||'',precio_costo:String(ep.precio_costo||''),
     precio_venta:String(ep.precio_venta||''),color:ep.color||'',cantidad:String(ep.cantidad||1),
     categoria_id:ep.categoria_id||'',origen_id:ep.origen_id||'',observacion:ep.observacion||'',
@@ -327,24 +443,48 @@ function RegistrarScreen(P){
   const[newCatTallas,setNewCatTallas]=useState('')
   const[showNewCol,setShowNewCol]=useState(false)
   const[newColName,setNewColName]=useState('')
+  const[errFields,setErrFields]=useState([])
   const fileRef=useRef(null)
-  const s=(k,v)=>setF(p=>({...p,[k]:v}))
+
+  /* helpers de estilo con borde rojo en error */
+  const iE=k=>({...iS(G),border:`1px solid ${errFields.includes(k)?G.err:G.border}`})
+  const sE=k=>({...sS(G),border:`1px solid ${errFields.includes(k)?G.err:G.border}`})
+
+  /* setter que limpia el error del campo */
+  const s=(k,v)=>{setF(p=>({...p,[k]:v}));setErrFields(prev=>prev.filter(e=>e!==k))}
   const sA=(k,v)=>setF(p=>({...p,atributos:{...p.atributos,[k]:v}}))
 
+  /* auto-código numérico */
+  const calcAutoCode=async()=>{
+    const{data}=await supabase.from('productos').select('codigo').eq('empresa_id',eid)
+    const nums=(data||[]).map(p=>parseInt(p.codigo)).filter(n=>!isNaN(n))
+    const next=nums.length>0?Math.max(...nums)+1:1
+    setF(prev=>({...prev,codigo:String(next).padStart(3,'0')}))
+  }
+
+  useEffect(()=>{
+    if(emp?.codigo_auto&&!ep)calcAutoCode()
+  },[])
+
   const catSel=cats.find(c=>c.id===parseInt(f.categoria_id))
-  const tallas=(()=>{const t=catSel?.tallas;if(!t)return[];if(typeof t==='string')try{return JSON.parse(t)}catch{return[]};return Array.isArray(t)?t:[]})()
-  const attrsDef=(()=>{const a=catSel?.atributos;if(!a)return[];if(typeof a==='string')try{return JSON.parse(a)}catch{return[]};return Array.isArray(a)?a:[]})()
+  const tallas=(()=>{const t=catSel?.tallas;if(!t)return[];if(typeof t==='string')try{return JSON.parse(t)}catch{return[]};return Array.isArray(t)?t:[]}())
+  const attrsDef=(()=>{const a=catSel?.atributos;if(!a)return[];if(typeof a==='string')try{return JSON.parse(a)}catch{return[]};return Array.isArray(a)?a:[]}())
   const colsFilt=cols.filter(c=>!colSrch||c.nombre.toLowerCase().includes(colSrch.toLowerCase()))
 
-  // Auto nombre
-  useEffect(()=>{const cat=cats.find(c=>c.id===parseInt(f.categoria_id))
+  /* auto nombre */
+  useEffect(()=>{
+    const cat=cats.find(c=>c.id===parseInt(f.categoria_id))
     const pts=[cat?.nombre||''];if(f.color)pts.push(f.color)
     if(f.atributos)Object.values(f.atributos).forEach(v=>{if(v)pts.push(v)})
-    const a=pts.filter(Boolean).join(' ');if(a)s('nombre',a)},[f.categoria_id,f.color,f.atributos,cats])
+    const a=pts.filter(Boolean).join(' ');if(a)s('nombre',a)
+  },[f.categoria_id,f.color,f.atributos,cats])
 
-  const onOrigenChange=v=>{s('origen_id',v);const o=oris.find(x=>x.id===parseInt(v))
+  const onOrigenChange=v=>{
+    s('origen_id',v)
+    const o=oris.find(x=>x.id===parseInt(v))
     if(o){if(o.precio_costo_defecto&&!f.precio_costo)s('precio_costo',String(o.precio_costo_defecto))
-      if(o.precio_venta_defecto&&!f.precio_venta)s('precio_venta',String(o.precio_venta_defecto))}}
+      if(o.precio_venta_defecto&&!f.precio_venta)s('precio_venta',String(o.precio_venta_defecto))}
+  }
 
   const onCamCapture=async b=>{
     if(cam==='label'){setCam(null);setOcrLoad(true)
@@ -357,7 +497,7 @@ function RegistrarScreen(P){
       }catch(e){notify('Error OCR','error')};setOcrLoad(false)
     }else if(cam==='product'){setCam(null);setFotoFile(new File([b],'p.jpg',{type:'image/jpeg'}))
       const r=new FileReader();r.onload=e=>setFotoPrev(e.target.result);r.readAsDataURL(b)
-    }else if(cam==='yape'){setCam(null)}
+    }
   }
   const onFileSelect=e=>{const file=e.target.files?.[0];if(!file)return;setFotoFile(file)
     const r=new FileReader();r.onload=ev=>setFotoPrev(ev.target.result);r.readAsDataURL(file);e.target.value=''}
@@ -374,12 +514,9 @@ function RegistrarScreen(P){
     if(error){notify('Error: '+error.message,'error');return}
     await loadAll();s('color',newColName.trim());setColSrch('');setShowNewCol(false);setNewColName('');notify('Color creado')}
 
-  // Auto detect from photo
   const autoDetect=async()=>{if(!fotoPrev)return;setDetecting(true)
     try{
-      // Color
       const color=await detectColor(fotoPrev);if(color)s('color',color)
-      // OCR text
       const comp=await comprimirImagen(fotoFile||new File([],'x'),600)
       const b64=await blobToBase64(comp)
       const fd=new FormData();fd.append('base64Image','data:image/jpeg;base64,'+b64);fd.append('OCREngine','3')
@@ -391,13 +528,32 @@ function RegistrarScreen(P){
     }catch(e){notify('Error al detectar','error')};setDetecting(false)
   }
 
+  /* ── GUARDAR con validación ── */
   const guardar=async(yNuevo=false)=>{
-    if(!f.codigo||!f.nombre){notify('Código y nombre obligatorios','error');return}
-    // Validar código único
-    if(!ep){const{data:dup}=await supabase.from('productos').select('id').eq('empresa_id',eid).eq('codigo',f.codigo).limit(1)
-      if(dup?.length>0){notify('Código '+f.codigo+' ya existe','error');return}}
+    /* validar obligatorios */
+    const errs=[]
+    if(!f.codigo)errs.push('codigo')
+    if(!f.origen_id)errs.push('origen_id')
+    if(!f.categoria_id)errs.push('categoria_id')
+    if(!f.color)errs.push('color')
+    if(!f.precio_venta)errs.push('precio_venta')
+    if(!f.cantidad)errs.push('cantidad')
+
+    if(errs.length>0){
+      const nm={codigo:'Código',origen_id:'Origen',categoria_id:'Categoría',color:'Color',precio_venta:'Precio Venta',cantidad:'Cantidad'}
+      notify('Faltan campos: '+errs.map(e=>nm[e]).join(', '),'error')
+      setErrFields(errs)
+      return
+    }
+    setErrFields([])
+
+    if(!ep){
+      const{data:dup}=await supabase.from('productos').select('id').eq('empresa_id',eid).eq('codigo',f.codigo).limit(1)
+      if(dup?.length>0){notify('Código '+f.codigo+' ya existe','error');return}
+    }
     setSaving(true)
-    try{let foto_url=ep?.foto_url||null
+    try{
+      let foto_url=ep?.foto_url||null
       if(fotoFile){const blob=await comprimirImagen(fotoFile,800);foto_url=await subirFoto(blob,f.codigo)}
       const data={empresa_id:eid,linea_id:lid,categoria_id:f.categoria_id||null,origen_id:f.origen_id||null,
         codigo:f.codigo,nombre:f.nombre,precio_costo:parseFloat(f.precio_costo)||0,precio_venta:parseFloat(f.precio_venta)||0,
@@ -406,26 +562,48 @@ function RegistrarScreen(P){
       if(ep){const{error}=await supabase.from('productos').update(data).eq('id',ep.id);if(error)throw error;notify('Actualizado')}
       else{const{error}=await supabase.from('productos').insert(data);if(error)throw error;notify('Registrado')}
       await loadAll()
-      if(yNuevo){setF(p=>({...p,codigo:'',nombre:'',color:'',cantidad:'1',observacion:'',atributos:{}}));setFotoFile(null);setFotoPrev(null)}
-      else setScr('catalogo')
-    }catch(e){notify('Error: '+e.message,'error')};setSaving(false)
+      if(yNuevo){
+        setF(p=>({...p,codigo:'',nombre:'',color:'',cantidad:'1',observacion:'',atributos:{}}))
+        setFotoFile(null);setFotoPrev(null)
+        if(emp?.codigo_auto)calcAutoCode()
+      }else setScr('catalogo')
+    }catch(e){notify('Error: '+e.message,'error')}
+    setSaving(false)
   }
 
+  /* ── RENDER ── */
   return(<div>
     {cam&&<CamModal onCapture={onCamCapture} onClose={()=>setCam(null)}/>}
     <Hdr tit={tit} sec={ep?'✏️ Editar':'➕ Registrar'} onBack={()=>setScr('catalogo')}/>
     <div style={{padding:16}}>
-      {/* Código */}
+
+      {/* 1. CÓDIGO */}
       <Crd title="1. Código de etiqueta">
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <input value={f.codigo} onChange={e=>s('codigo',e.target.value.toUpperCase())} placeholder="125"
-            style={{width:100,padding:10,borderRadius:8,border:'2px solid '+G.gold,fontSize:20,fontWeight:700,textAlign:'center',letterSpacing:2}}/>
-          <button onClick={()=>setCam('label')} disabled={ocrLoad}
-            style={{flex:1,padding:'12px',borderRadius:8,border:'none',background:ocrLoad?G.muted:G.gold,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer'}}>
-            {ocrLoad?'⏳ Leyendo...':'📷 Escanear código'}</button>
-        </div>
+        {emp?.codigo_auto?(
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <div style={{width:110,padding:10,borderRadius:8,border:'2px solid '+G.gold,fontSize:20,
+              fontWeight:700,textAlign:'center',letterSpacing:3,color:G.gold,background:G.goldLt}}>
+              {f.codigo||'...'}
+            </div>
+            <div style={{flex:1,padding:'10px 12px',borderRadius:8,background:G.goldLt,
+              fontSize:12,color:G.muted,textAlign:'center',border:'1px dashed '+G.gold}}>
+              🔢 Código automático
+            </div>
+          </div>
+        ):(
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <input value={f.codigo} onChange={e=>s('codigo',e.target.value.toUpperCase())} placeholder="125"
+              style={{width:100,padding:10,borderRadius:8,fontSize:20,fontWeight:700,textAlign:'center',letterSpacing:2,
+                border:`2px solid ${errFields.includes('codigo')?G.err:G.gold}`}}/>
+            <button onClick={()=>setCam('label')} disabled={ocrLoad}
+              style={{flex:1,padding:'12px',borderRadius:8,border:'none',background:ocrLoad?G.muted:G.gold,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer'}}>
+              {ocrLoad?'⏳ Leyendo...':'📷 Escanear código'}</button>
+          </div>
+        )}
+        {errFields.includes('codigo')&&<p style={{fontSize:11,color:G.err,margin:'4px 0 0'}}>⚠ El código es obligatorio</p>}
       </Crd>
-      {/* Foto */}
+
+      {/* 2. FOTO */}
       <Crd title="2. Foto del producto">
         {fotoPrev?(<div style={{position:'relative'}}>
           <img src={fotoPrev} alt="" style={{width:'100%',height:180,objectFit:'cover',borderRadius:8}}/>
@@ -443,15 +621,23 @@ function RegistrarScreen(P){
         </div>)}
         <input key={fileKey} ref={fileRef} type="file" accept="image/*" onChange={onFileSelect} style={{display:'none'}}/>
       </Crd>
-      {/* Datos */}
+
+      {/* 3. DATOS */}
       <Crd title="3. Datos">
-        <label style={{fontSize:11,color:G.muted}}>Origen</label>
-        <select value={f.origen_id} onChange={e=>onOrigenChange(e.target.value)} style={sS(G)}>
+        {/* ORIGEN */}
+        <label style={{fontSize:11,color:errFields.includes('origen_id')?G.err:G.muted,fontWeight:errFields.includes('origen_id')?700:400}}>
+          Origen {errFields.includes('origen_id')&&'⚠ obligatorio'}
+        </label>
+        <select value={f.origen_id} onChange={e=>onOrigenChange(e.target.value)} style={sE('origen_id')}>
           <option value="">Seleccionar origen</option>
           {oris.map(o=><option key={o.id} value={o.id}>{o.nombre}{o.precio_venta_defecto?' (C:'+o.precio_costo_defecto+' V:'+o.precio_venta_defecto+')':''}</option>)}
         </select>
+
+        {/* CATEGORÍA */}
         <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:2}}>
-          <label style={{fontSize:11,color:G.muted}}>Categoría</label>
+          <label style={{fontSize:11,color:errFields.includes('categoria_id')?G.err:G.muted,fontWeight:errFields.includes('categoria_id')?700:400}}>
+            Categoría {errFields.includes('categoria_id')&&'⚠ obligatoria'}
+          </label>
           <button onClick={()=>setShowNewCat(!showNewCat)} style={{fontSize:10,color:G.gold,background:'none',border:'none',cursor:'pointer',fontWeight:700}}>+ Nueva</button>
         </div>
         {showNewCat&&(<div style={{background:G.goldLt,borderRadius:8,padding:10,marginBottom:8}}>
@@ -462,23 +648,33 @@ function RegistrarScreen(P){
             <button onClick={crearCatRapido} disabled={!newCatName.trim()} style={{flex:1,padding:8,borderRadius:6,border:'none',background:newCatName.trim()?G.gold:'#ccc',color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer'}}>Crear y seleccionar</button>
           </div>
         </div>)}
-        <select value={f.categoria_id} onChange={e=>s('categoria_id',e.target.value)} style={sS(G)}>
+        <select value={f.categoria_id} onChange={e=>s('categoria_id',e.target.value)} style={sE('categoria_id')}>
           <option value="">Seleccionar</option>{cats.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
+
+        {/* TALLAS */}
         {tallas.length>0&&(<><label style={{fontSize:11,color:G.muted}}>Talla</label>
           <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
             {tallas.map(t=><button key={t} onClick={()=>sA('talla',t)} style={{padding:'5px 9px',borderRadius:6,border:'none',fontSize:12,fontWeight:600,cursor:'pointer',
               background:f.atributos?.talla===t?G.gold:G.goldSf,color:f.atributos?.talla===t?'#fff':G.goldDk}}>{t}</button>)}</div></>)}
+
+        {/* ATRIBUTOS DINÁMICOS */}
         {attrsDef.map(a=>(<div key={a.key} style={{marginBottom:8}}><label style={{fontSize:11,color:G.muted}}>{a.label}</label>
           {a.tipo==='select'?(<div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
             {a.opciones.map(op=><button key={op} onClick={()=>sA(a.key,op)} style={{padding:'5px 9px',borderRadius:6,border:'none',fontSize:12,fontWeight:600,cursor:'pointer',
               background:f.atributos?.[a.key]===op?G.gold:G.goldSf,color:f.atributos?.[a.key]===op?'#fff':G.goldDk}}>{op}</button>)}</div>
           ):<input value={f.atributos?.[a.key]||''} onChange={e=>sA(a.key,e.target.value)} style={iS(G)}/>}</div>))}
+
+        {/* GÉNERO */}
         {catSel&&tallas.length>0&&!attrsDef.find(a=>a.key==='genero')&&(<><label style={{fontSize:11,color:G.muted}}>Género</label>
           <div style={{display:'flex',gap:6,marginBottom:8}}>
             {['Mujer','Hombre','Unisex'].map(g=><button key={g} onClick={()=>sA('genero',g)} style={{flex:1,padding:7,borderRadius:6,border:'none',fontSize:12,fontWeight:600,cursor:'pointer',
               background:f.atributos?.genero===g?G.gold:G.goldSf,color:f.atributos?.genero===g?'#fff':G.goldDk}}>{g}</button>)}</div></>)}
+
+        {/* COLOR */}
         <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:2}}>
-          <label style={{fontSize:11,color:G.muted}}>Color</label>
+          <label style={{fontSize:11,color:errFields.includes('color')?G.err:G.muted,fontWeight:errFields.includes('color')?700:400}}>
+            Color {errFields.includes('color')&&'⚠ obligatorio'}
+          </label>
           <button onClick={()=>setShowNewCol(!showNewCol)} style={{fontSize:10,color:G.gold,background:'none',border:'none',cursor:'pointer',fontWeight:700}}>+ Nuevo</button>
         </div>
         {showNewCol&&(<div style={{display:'flex',gap:6,marginBottom:8}}>
@@ -486,34 +682,49 @@ function RegistrarScreen(P){
           <button onClick={crearColRapido} disabled={!newColName.trim()} style={{padding:'8px 12px',borderRadius:8,border:'none',background:newColName.trim()?G.gold:'#ccc',color:'#fff',fontSize:11,fontWeight:600,cursor:'pointer'}}>Crear</button>
           <button onClick={()=>{setShowNewCol(false);setNewColName('')}} style={{padding:'8px 10px',borderRadius:8,border:'1px solid '+G.border,background:'transparent',color:G.muted,fontSize:11,cursor:'pointer'}}>✕</button>
         </div>)}
-        <input value={f.color} onChange={e=>{s('color',e.target.value);setColSrch(e.target.value)}} placeholder="Escribe..." style={iS(G)}/>
+        <input value={f.color} onChange={e=>{s('color',e.target.value);setColSrch(e.target.value)}}
+          placeholder="Escribe o selecciona..." style={iE('color')}/>
         {colSrch&&colsFilt.length>0&&(<div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
           {colsFilt.slice(0,8).map(c=><button key={c.id} onClick={()=>{s('color',c.nombre);setColSrch('')}}
             style={{padding:'3px 8px',borderRadius:10,border:'1px solid '+G.border,background:'#fff',fontSize:10,cursor:'pointer'}}>{c.nombre}</button>)}</div>)}
+
+        {/* PRECIOS Y CANTIDAD */}
         <div style={{display:'flex',gap:8}}>
-          <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Precio Costo (S/)</label>
+          <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Precio Costo (S/) — opcional</label>
             <input value={f.precio_costo} onChange={e=>s('precio_costo',e.target.value)} type="number" placeholder="0" style={iS(G)}/></div>
-          <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Precio Venta (S/)</label>
-            <input value={f.precio_venta} onChange={e=>s('precio_venta',e.target.value)} type="number" placeholder="0" style={iS(G)}/></div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:11,color:errFields.includes('precio_venta')?G.err:G.muted,fontWeight:errFields.includes('precio_venta')?700:400}}>
+              Precio Venta (S/) {errFields.includes('precio_venta')&&'⚠'}
+            </label>
+            <input value={f.precio_venta} onChange={e=>s('precio_venta',e.target.value)} type="number" placeholder="0" style={iE('precio_venta')}/></div>
         </div>
         <div style={{display:'flex',gap:8}}>
-          <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Cantidad</label>
-            <input value={f.cantidad} onChange={e=>s('cantidad',e.target.value)} type="number" style={iS(G)}/></div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:11,color:errFields.includes('cantidad')?G.err:G.muted,fontWeight:errFields.includes('cantidad')?700:400}}>
+              Cantidad {errFields.includes('cantidad')&&'⚠ obligatoria'}
+            </label>
+            <input value={f.cantidad} onChange={e=>s('cantidad',e.target.value)} type="number" style={iE('cantidad')}/></div>
         </div>
+
+        {/* NOMBRE AUTO */}
         <label style={{fontSize:11,color:G.muted}}>Nombre (auto-generado)</label>
         <input value={f.nombre} onChange={e=>s('nombre',e.target.value)} style={iS(G)}/>
+
+        {/* OBSERVACIÓN */}
         <div style={{display:'flex',gap:8,alignItems:'end'}}>
-          <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Observación</label>
+          <div style={{flex:1}}><label style={{fontSize:11,color:G.muted}}>Observación — opcional</label>
             <textarea value={f.observacion} onChange={e=>s('observacion',e.target.value)} rows={2} style={{...iS(G),resize:'vertical'}}/></div>
           <VoiceBtn onResult={t=>s('observacion',(f.observacion?f.observacion+' ':'')+t)}/>
         </div>
       </Crd>
+
+      {/* BOTONES */}
       <div style={{display:'flex',gap:8,marginBottom:20}}>
-        <button onClick={()=>guardar(false)} disabled={saving||!f.codigo}
-          style={{flex:1,padding:14,borderRadius:12,border:'none',background:f.codigo?G.gold:'#ccc',color:'#fff',fontSize:14,fontWeight:700,cursor:f.codigo?'pointer':'default'}}>
+        <button onClick={()=>guardar(false)} disabled={saving}
+          style={{flex:1,padding:14,borderRadius:12,border:'none',background:G.gold,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer'}}>
           {saving?'...':ep?'✅ Actualizar':'✅ Registrar y Salir'}</button>
-        {!ep&&<button onClick={()=>guardar(true)} disabled={saving||!f.codigo}
-          style={{flex:1,padding:14,borderRadius:12,border:'2px solid '+G.gold,background:'transparent',color:G.gold,fontSize:14,fontWeight:700,cursor:f.codigo?'pointer':'default'}}>
+        {!ep&&<button onClick={()=>guardar(true)} disabled={saving}
+          style={{flex:1,padding:14,borderRadius:12,border:'2px solid '+G.gold,background:'transparent',color:G.gold,fontSize:14,fontWeight:700,cursor:'pointer'}}>
           {saving?'...':'➕ Registrar y Nuevo'}</button>}
       </div>
     </div>
@@ -672,7 +883,6 @@ function VentaScreen(P){
         <p style={{color:'rgba(255,255,255,0.7)',fontSize:12,margin:0}}>Total</p>
         <p style={{color:'#fff',fontSize:30,fontWeight:800,margin:'2px 0'}}>S/ {total.toFixed(2)}</p>
       </div>
-      {/* Cliente */}
       <Crd title="Cliente (opcional)">
         <input value={cliBusq} onChange={e=>setCliBusq(e.target.value)} placeholder="Buscar cliente..." style={iS(G)}/>
         {cliBusq&&clFilt.length>0&&(<div style={{maxHeight:100,overflowY:'auto',marginBottom:8}}>
@@ -692,20 +902,19 @@ function VentaScreen(P){
           <button onClick={crearCli} style={{width:'100%',padding:8,borderRadius:6,border:'none',background:G.gold,color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer'}}>Guardar</button>
         </div>)}
       </Crd>
-      {/* Entrega */}
       <Crd title="Entrega"><div style={{display:'flex',gap:8}}>
         {['En tienda','Delivery'].map(e=>(<button key={e} onClick={()=>setEntrega(e)}
           style={{flex:1,padding:10,borderRadius:8,border:entrega===e?'2px solid '+G.gold:'2px solid transparent',
             background:entrega===e?G.goldSf:'#f5f5f5',cursor:'pointer',fontSize:13,fontWeight:600,color:entrega===e?G.goldDk:G.text}}>
           {e==='En tienda'?'🏪':'🛵'} {e}</button>))}</div></Crd>
-      {/* Pago */}
       <Crd title="Método de pago"><div style={{display:'flex',gap:8}}>
         {['Efectivo','Yape'].map(m=>(<button key={m} onClick={()=>{setMetodo(m);if(m==='Yape'&&!fotoYape)setCam('yape')}}
           style={{flex:1,padding:12,borderRadius:8,border:metodo===m?'2px solid '+G.gold:'2px solid transparent',
             background:metodo===m?G.goldSf:'#f5f5f5',cursor:'pointer',fontSize:14,fontWeight:600,color:metodo===m?G.goldDk:G.text}}>
-          {m==='Efectivo'?'💵':'📱'} {m}</button>))}</div>
+          {m==='Efectivo'?'💵':'📱'} {m}</button>))}
+        </div>
         {metodo==='Yape'&&(<div style={{marginTop:8}}>
-          {fotoYape?(<div style={{position:'relative'}}><p style={{fontSize:11,color:G.ok,margin:'0 0 4px'}}>✅ Comprobante capturado</p>
+          {fotoYape?(<div><p style={{fontSize:11,color:G.ok,margin:'0 0 4px'}}>✅ Comprobante capturado</p>
             <button onClick={()=>setFotoYape(null)} style={{fontSize:10,color:G.err,background:'none',border:'none',cursor:'pointer'}}>Eliminar foto</button></div>
           ):(<div style={{display:'flex',gap:6}}>
             <button onClick={()=>setCam('yape')} style={{flex:1,padding:8,borderRadius:6,border:'1px dashed '+G.gold,background:G.goldLt,cursor:'pointer',fontSize:11,color:G.gold}}>📷 Capturar</button>
@@ -736,7 +945,7 @@ function SubMenu(P){
         <p style={{fontSize:10,color:G.muted,margin:'2px 0 0'}}>{it.d}</p></button>))}</div></div>)
 }
 
-/* ═══ ORÍGENES (específico) ═══ */
+/* ═══ ORÍGENES ═══ */
 function OrigenesScr(P){
   const{eid,lid,tit,oris,notify,loadAll,setScr}=P
   const[showAdd,setShowAdd]=useState(false)
@@ -763,7 +972,6 @@ function OrigenesScr(P){
   return(<div>
     <Hdr tit={tit} sec="📋 Orígenes" onBack={()=>setScr('submenu')}/>
     <div style={{padding:16}}>
-      {/* Total general */}
       <div style={{display:'flex',gap:8,marginBottom:12}}>
         <div style={{flex:1,background:G.gold,borderRadius:10,padding:12,textAlign:'center'}}>
           <p style={{color:'rgba(255,255,255,0.7)',fontSize:9,margin:0}}>Inversión Total</p>
@@ -817,7 +1025,7 @@ function OrigenesScr(P){
     </div></div>)
 }
 
-/* ═══ CATEGORÍAS (con tallas) ═══ */
+/* ═══ CATEGORÍAS ═══ */
 function CatsScr(P){
   const{eid,lid,tit,cats,notify,loadAll,setScr}=P
   const[showAdd,setShowAdd]=useState(false)
@@ -826,7 +1034,7 @@ function CatsScr(P){
   const[tallasStr,setTallasStr]=useState('')
 
   const abrir=c=>{if(c){setEditCat(c);setNombre(c.nombre)
-    const t=c.tallas;const arr=!t?[]:typeof t==='string'?(() => {try{return JSON.parse(t)}catch{return[]}})():Array.isArray(t)?t:[]
+    const t=c.tallas;const arr=!t?[]:typeof t==='string'?(()=>{try{return JSON.parse(t)}catch{return[]}})():Array.isArray(t)?t:[]
     setTallasStr(arr.join(', '))}
     else{setEditCat(null);setNombre('');setTallasStr('')};setShowAdd(true)}
 
@@ -999,7 +1207,7 @@ function StockScr(P){
 /* ═══ HISTORIAL VENTAS ═══ */
 function HistorialScr(P){
   const{tit,vents,setScr,notify}=P
-  const tV=vents.reduce((s,v)=>s+v.total,0),tI=vents.reduce((s,v)=>s+v.cantidad,0)
+  const tV=vents.reduce((s,v)=>s+v.total,0)
   const tG=vents.reduce((s,v)=>s+(v.precio_venta_real-v.precio_costo)*v.cantidad,0)
 
   const exp=()=>{exportCSV(vents,'ventas_'+new Date().toISOString().split('T')[0],[
