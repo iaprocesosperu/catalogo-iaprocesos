@@ -214,9 +214,13 @@ export default function App(){
   const [sharedPhoto,setSharedPhoto]=useState(null)
 
   const notify=(m,t='success')=>{setNotif({m,t});setTimeout(()=>setNotif(null),3500)}
+  const fromShareRef=useRef(false)
 
   useEffect(()=>{
-    const h=()=>{if(scr!=='catalogo'&&scr!=='access'){setScr('catalogo')}else{window.history.pushState(null,'',window.location.href)}}
+    const h=()=>{
+      if(fromShareRef.current){window.history.pushState(null,'',window.location.href);return}
+      if(scr!=='catalogo'&&scr!=='access'){setScr('catalogo')}else{window.history.pushState(null,'',window.location.href)}
+    }
     window.history.pushState(null,'',window.location.href)
     window.addEventListener('popstate',h)
     return()=>window.removeEventListener('popstate',h)
@@ -234,10 +238,10 @@ export default function App(){
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search)
     if(params.get('shared')==='true'||params.get('share')==='true'){
-      // Limpiar URL del redirect antes de navegar
+      // Bloquear popstate por 3 segundos mientras se estabiliza el redirect
+      fromShareRef.current=true
+      setTimeout(()=>{fromShareRef.current=false},3000)
       window.history.replaceState({},'','/')
-      window.history.replaceState({},'','/')
-      // Delay para dejar que el historial del redirect se estabilice
       setTimeout(()=>{
         checkSharedPhoto().then(file=>{
           if(file)setSharedPhoto(file)
