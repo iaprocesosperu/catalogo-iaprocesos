@@ -234,11 +234,16 @@ export default function App(){
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search)
     if(params.get('shared')==='true'||params.get('share')==='true'){
+      // Limpiar URL del redirect antes de navegar
       window.history.replaceState({},'','/')
-      checkSharedPhoto().then(file=>{
-        if(file)setSharedPhoto(file)
-        setScr('registrar')
-      })
+      window.history.replaceState({},'','/')
+      // Delay para dejar que el historial del redirect se estabilice
+      setTimeout(()=>{
+        checkSharedPhoto().then(file=>{
+          if(file)setSharedPhoto(file)
+          setScr('registrar')
+        })
+      },400)
     }
   },[])
 
