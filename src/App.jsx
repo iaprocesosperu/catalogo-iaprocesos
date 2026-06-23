@@ -211,6 +211,7 @@ export default function App(){
   const [notif,setNotif]=useState(null)
   const [editP,setEditP]=useState(null)
   const [ventaP,setVentaP]=useState(null)
+  const [sharedPhoto,setSharedPhoto]=useState(null)
 
   const notify=(m,t='success')=>{setNotif({m,t});setTimeout(()=>setNotif(null),3500)}
 
@@ -221,9 +222,24 @@ export default function App(){
     return()=>window.removeEventListener('popstate',h)
   },[scr])
 
+  const checkSharedPhoto=async()=>{
+    try{
+      const cache=await caches.open('share-target-v1')
+      const resp=await cache.match('/shared-photo')
+      if(resp){const blob=await resp.blob();await cache.delete('/shared-photo');return new File([blob],'shared.jpg',{type:blob.type||'image/jpeg'})}
+    }catch(e){}
+    return null
+  }
+
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search)
-    if(params.get('share')==='true'){setScr('registrar')}
+    if(params.get('shared')==='true'||params.get('share')==='true'){
+      window.history.replaceState({},'','/')
+      checkSharedPhoto().then(file=>{
+        if(file)setSharedPhoto(file)
+        setScr('registrar')
+      })
+    }
   },[])
 
   useEffect(()=>{const k=localStorage.getItem('ia_key');if(k)loginKey(k)},[])
@@ -266,7 +282,7 @@ export default function App(){
         boxShadow:'0 4px 15px rgba(0,0,0,0.2)'}}>{notif.m}</div>}
       {scr==='access'&&<AccessScreen login={loginKey} loading={loading}/>}
       {scr==='catalogo'&&<CatalogoScreen {...P}/>}
-      {scr==='registrar'&&<RegistrarScreen {...P} editP={editP}/>}
+      {scr==='registrar'&&<RegistrarScreen {...P} editP={editP} sharedPhoto={sharedPhoto} clearSharedPhoto={()=>setSharedPhoto(null)}/>}
       {scr==='buscar'&&<BuscarScreen {...P}/>}
       {scr==='venta'&&<VentaScreen {...P} prod={ventaP}/>}
       {scr==='submenu'&&<SubMenu {...P}/>}
@@ -465,6 +481,16 @@ function RegistrarScreen(P){
   useEffect(()=>{
     if(emp?.codigo_auto&&!ep)calcAutoCode()
   },[])
+
+  // Cargar foto compartida desde Android Share Target
+  useEffect(()=>{
+    if(P.sharedPhoto&&!ep){
+      setFotoFile(P.sharedPhoto)
+      const r=new FileReader();r.onload=e=>setFotoPrev(e.target.result);r.readAsDataURL(P.sharedPhoto)
+      P.clearSharedPhoto()
+      notify('📸 Foto cargada — completa los datos del producto')
+    }
+  },[P.sharedPhoto])
 
   const catSel=cats.find(c=>c.id===parseInt(f.categoria_id))
   const _parseArr=(v)=>{if(!v)return[];try{return typeof v==='string'?JSON.parse(v):Array.isArray(v)?v:[]}catch(e){return[]}}
