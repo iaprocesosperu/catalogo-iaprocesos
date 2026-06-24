@@ -256,7 +256,7 @@ export default function App(){
   const loginKey=async(k)=>{
     setLoading(true)
     const{data}=await supabase.from('empresas').select('*').eq('access_key',k).eq('activo',true).single()
-    if(data){setEmp(data);localStorage.setItem('ia_key',k);await loadAll(data.id);setScr('catalogo')}
+    if(data){setEmp(data);localStorage.setItem('ia_key',k);await loadAll(data.id);if(!fromShareRef.current)setScr('catalogo')}
     else{notify('Clave inválida','error');localStorage.removeItem('ia_key')}
     setLoading(false)
   }
