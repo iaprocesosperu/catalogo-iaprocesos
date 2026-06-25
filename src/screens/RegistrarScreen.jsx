@@ -23,6 +23,7 @@ export default function RegistrarScreen(P) {
   const [ocrLoad, setOcrLoad] = useState(false)
   const [detecting, setDetecting] = useState(false)
   const [mejorandoIdx, setMejorandoIdx] = useState(null)
+  const [fotoViewer, setFotoViewer] = useState(null) // índice de foto en viewer
   const [cam, setCam] = useState(null) // 'label' | 'foto'
   const [colSrch, setColSrch] = useState('')
   const [fileKey, setFileKey] = useState(0)
@@ -291,9 +292,52 @@ export default function RegistrarScreen(P) {
   // foto principal para auto-detectar y preview principal
   const fotoPrincipal = fotos.find(f => f.es_principal) || fotos[0]
 
+  // Viewer local (sin guardar)
+  const FotoViewerLocal = () => {
+    if (fotoViewer === null) return null
+    const foto = fotos[fotoViewer]
+    if (!foto) return null
+    return (
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.97)',zIndex:9500,display:'flex',flexDirection:'column'}}>
+        {/* Header */}
+        <div style={{padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',borderBottom:'1px solid rgba(255,255,255,0.1)'}}>
+          <div>
+            <p style={{color:G.gold,fontSize:11,margin:0,fontWeight:700}}>Foto {fotoViewer+1} de {fotos.length}</p>
+            {foto.es_principal && <p style={{color:'#aaa',fontSize:10,margin:0}}>⭐ Principal</p>}
+          </div>
+          <button onClick={()=>setFotoViewer(null)} style={{background:'rgba(255,255,255,0.1)',border:'none',color:'#fff',fontSize:20,cursor:'pointer',width:36,height:36,borderRadius:18,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+        </div>
+        {/* Foto */}
+        <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
+          {mejorandoIdx===fotoViewer
+            ? <div style={{color:'#fff',textAlign:'center'}}><p style={{fontSize:40}}>✨</p><p>Mejorando con IA...</p></div>
+            : <img src={foto.url} alt="" style={{maxWidth:'94%',maxHeight:'94%',objectFit:'contain',borderRadius:8}}/>
+          }
+        </div>
+        {/* Acciones */}
+        <div style={{padding:'12px 16px 20px',background:'rgba(0,0,0,0.5)',display:'flex',gap:8}}>
+          {emp?.api_openai_key && (
+            <button onClick={async()=>{await mejorarFotoEnReg(fotoViewer)}} disabled={mejorandoIdx!==null}
+              style={{flex:1,padding:'12px 0',borderRadius:10,border:'none',background:mejorandoIdx!==null?'#444':'#6C47FF',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+              {mejorandoIdx===fotoViewer?'⏳ Mejorando...':'✨ Mejorar IA'}
+            </button>
+          )}
+          <button onClick={()=>{setCam('foto');setFotoViewer(null)}}
+            style={{flex:1,padding:'12px 0',borderRadius:10,border:'1px solid rgba(197,165,90,0.5)',background:'rgba(197,165,90,0.1)',color:G.gold,fontSize:13,fontWeight:700,cursor:'pointer'}}>
+            🔄 Cambiar
+          </button>
+          <button onClick={()=>{eliminarFoto(fotoViewer);setFotoViewer(null)}}
+            style={{flex:1,padding:'12px 0',borderRadius:10,border:'none',background:'#C0392B',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+            🗑 Eliminar
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
-      {cam && cam !== 'foto' ? null : null}
+      <FotoViewerLocal />
       {(cam === 'label' || cam === 'foto') && <CamModal onCapture={onCamCapture} onClose={() => setCam(null)} />}
       <Hdr tit={tit} sec={ep ? '✏️ Editar' : '➕ Registrar'} onBack={() => setScr('catalogo')} />
       <div style={{ padding: 16 }}>
@@ -324,7 +368,7 @@ export default function RegistrarScreen(P) {
           {fotos.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 10 }}>
               {fotos.map((foto, i) => (
-                <div key={i} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: foto.es_principal ? '2px solid ' + G.gold : '2px solid transparent' }}>
+                <div key={i} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: foto.es_principal ? '2px solid ' + G.gold : '2px solid transparent', cursor: 'pointer' }} onClick={() => setFotoViewer(i)}>
                   <img src={foto.url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover' }} />
                   {foto.es_principal && (
                     <div style={{ position: 'absolute', top: 2, left: 2, background: G.gold, color: '#fff', fontSize: 8, padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>⭐</div>

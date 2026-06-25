@@ -31,26 +31,45 @@ export function SubMenu(P) {
 /* ═══ DETALLE ORIGEN ═══ */
 function OrigenDetalle({ origen, eid, onClose }) {
   const [prods, setProds] = useState([])
+  const [ventas, setVentas] = useState([])
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
     const cargar = async () => {
-      const { data } = await supabase.from('productos')
-        .select('*,categorias(nombre)')
-        .eq('empresa_id', eid)
-        .eq('origen_id', origen.id)
-        .eq('activo', true)
-        .order('codigo')
-      setProds(data || [])
+      const [{ data: ps }, { data: vs }] = await Promise.all([
+        supabase.from('productos').select('*,categorias(nombre)')
+          .eq('empresa_id', eid).eq('origen_id', origen.id).eq('activo', true).order('codigo'),
+        supabase.from('ventas').select('*')
+          .eq('empresa_id', eid)
+      ])
+      const prods = ps || []
+      // Filtrar ventas que corresponden a productos de este origen
+      const prodIds = new Set(prods.map(p => p.id))
+      const ventasOrigen = (vs || []).filter(v => prodIds.has(v.producto_id))
+      setProds(prods)
+      setVentas(ventasOrigen)
       setCargando(false)
     }
     cargar()
   }, [])
 
-  const totalInv = prods.reduce((s, p) => s + (p.precio_costo || 0) * p.cantidad, 0)
-  const totalVenta = prods.reduce((s, p) => s + (p.precio_venta || 0) * p.cantidad, 0)
-  const ganancia = totalVenta - totalInv
-  const pctGan = totalInv > 0 ? ((ganancia / totalInv) * 100).toFixed(0) : 0
+  // Stock actual valorizado
+  const invStock = prods.reduce((s, p) => s + (p.precio_costo || 0) * p.cantidad, 0)
+  // Inversión de lo vendido (a precio costo)
+  const invVendido = ventas.reduce((s, v) => s + (v.precio_costo || 0) * v.cantidad, 0)
+  // Inversión total = stock + vendido
+  const totalInv = invStock + invVendido
+  // Venta real (lo que ya se cobró)
+  const ventaReal = ventas.reduce((s, v) => s + v.total, 0)
+  // Venta esperada del stock pendiente
+  const ventaEsperada = prods.reduce((s, p) => s + (p.precio_venta || 0) * p.cantidad, 0)
+  // Ganancia real (ventas ya cobradas)
+  const gananciaReal = ventas.reduce((s, v) => s + (v.precio_venta_real - v.precio_costo) * v.cantidad, 0)
+  // Ganancia esperada total (real + pendiente)
+  const gananciaEsperada = gananciaReal + prods.reduce((s, p) => s + (p.precio_venta - p.precio_costo) * p.cantidad, 0)
+  const pctGan = totalInv > 0 ? ((gananciaEsperada / totalInv) * 100).toFixed(0) : 0
+  const totalItemsVendidos = ventas.reduce((s, v) => s + v.cantidad, 0)
+  const totalItemsStock = prods.reduce((s, p) => s + p.cantidad, 0)
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: G.bg, zIndex: 8000, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
@@ -71,27 +90,42 @@ function OrigenDetalle({ origen, eid, onClose }) {
       <div style={{ padding: 16 }}>
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+          {/* Items */}
           <div style={{ background: G.goldLt, borderRadius: 10, padding: 12, border: '1px solid ' + G.border }}>
-            <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Items totales</p>
-            <p style={{ fontSize: 20, fontWeight: 800, color: G.gold, margin: '2px 0' }}>{prods.reduce((s,p) => s + p.cantidad, 0)}<span style={{ fontSize: 10, color: G.muted }}>/{origen.cantidad || '∞'}</span></p>
-            <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{prods.length} productos</p>
+            <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Items en stock</p>
+            <p style={{ fontSize: 20, fontWeight: 800, color: G.gold, margin: '2px 0' }}>{totalItemsStock}<span style={{ fontSize: 10, color: G.muted }}>/{origen.cantidad || '∞'}</span></p>
+            <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{prods.length} productos • {totalItemsVendidos} vendidos</p>
           </div>
+          {/* Fecha */}
           <div style={{ background: G.goldLt, borderRadius: 10, padding: 12, border: '1px solid ' + G.border }}>
             <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Fecha</p>
             <p style={{ fontSize: 13, fontWeight: 700, color: G.text, margin: '2px 0' }}>{origen.fecha || '—'}</p>
             <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{origen.observaciones || ''}</p>
           </div>
+          {/* Inversión total */}
           <div style={{ background: '#1A1A1A', borderRadius: 10, padding: 12 }}>
-            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', margin: 0 }}>Inversión</p>
+            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', margin: 0 }}>Inversión total</p>
             <p style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: '2px 0' }}>S/{totalInv.toFixed(0)}</p>
-            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', margin: 0 }}>stock actual</p>
+            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', margin: 0 }}>stock S/{invStock.toFixed(0)} + vendido S/{invVendido.toFixed(0)}</p>
           </div>
-          <div style={{ background: ganancia >= 0 ? G.ok : G.err, borderRadius: 10, padding: 12 }}>
-            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.8)', margin: 0 }}>Ganancia esperada</p>
-            <p style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: '2px 0' }}>{ganancia >= 0 ? '+' : ''}S/{ganancia.toFixed(0)}</p>
-            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.8)', margin: 0 }}>{pctGan}% margen • Venta S/{totalVenta.toFixed(0)}</p>
+          {/* Ganancia */}
+          <div style={{ background: gananciaEsperada >= 0 ? G.ok : G.err, borderRadius: 10, padding: 12 }}>
+            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.8)', margin: 0 }}>Ganancia total</p>
+            <p style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: '2px 0' }}>{gananciaEsperada >= 0 ? '+' : ''}S/{gananciaEsperada.toFixed(0)}</p>
+            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.8)', margin: 0 }}>{pctGan}% margen</p>
           </div>
         </div>
+        {/* Resumen ventas vs pendiente */}
+        {ventas.length > 0 && (
+          <div style={{ background: '#F0FDF4', borderRadius: 10, padding: 12, marginBottom: 12, border: '1px solid #BBF7D0' }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#065F46', margin: '0 0 6px' }}>💰 Ventas realizadas</p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div><p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Cobrado</p><p style={{ fontSize: 16, fontWeight: 800, color: G.ok, margin: 0 }}>S/{ventaReal.toFixed(0)}</p></div>
+              <div><p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Ganancia real</p><p style={{ fontSize: 16, fontWeight: 800, color: G.ok, margin: 0 }}>+S/{gananciaReal.toFixed(0)}</p></div>
+              <div><p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Pendiente vender</p><p style={{ fontSize: 16, fontWeight: 800, color: G.gold, margin: 0 }}>S/{ventaEsperada.toFixed(0)}</p></div>
+            </div>
+          </div>
+        )}
 
         {/* Lista productos */}
         <p style={{ fontSize: 12, fontWeight: 700, color: G.text, margin: '0 0 8px' }}>Productos de este origen</p>
