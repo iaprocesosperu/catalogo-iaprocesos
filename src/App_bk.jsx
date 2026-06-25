@@ -14,35 +14,6 @@ function downloadPhoto(url,nombre){
   fetch(url).then(r=>r.blob()).then(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(nombre||'foto')+'.jpg';a.click();URL.revokeObjectURL(a.href)}).catch(()=>{window.open(url,'_blank')})
 }
 
-
-/* ═══ MEJORAR FOTO CON IA (OpenAI gpt-image-1) ═══ */
-async function mejorarFotoConIA(fileOrBlob, apiKey){
-  try{
-    // Convertir a PNG (requerido por gpt-image-1 edits)
-    const img=new Image()
-    const origUrl=URL.createObjectURL(fileOrBlob)
-    await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=origUrl})
-    const canvas=document.createElement('canvas')
-    canvas.width=img.naturalWidth;canvas.height=img.naturalHeight
-    canvas.getContext('2d').drawImage(img,0,0)
-    URL.revokeObjectURL(origUrl)
-    const pngBlob=await new Promise(res=>canvas.toBlob(res,'image/png'))
-    const fd=new FormData()
-    fd.append('model','gpt-image-1')
-    fd.append('image',pngBlob,'product.png')
-    fd.append('prompt','Mejora esta foto de producto de ropa para catálogo de tienda: fondo limpio y uniforme (blanco o gris claro), elimina arrugas, quita etiquetas de precio o código si hay, corrige iluminación, centra el producto, mantén los colores reales y el logo/marca si existe.')
-    const resp=await fetch('https://api.openai.com/v1/images/edits',{method:'POST',headers:{'Authorization':'Bearer '+apiKey},body:fd})
-    if(!resp.ok){const err=await resp.json();throw new Error(err?.error?.message||'Error OpenAI')}
-    const data=await resp.json()
-    const b64=data?.data?.[0]?.b64_json
-    if(!b64)throw new Error('Sin imagen en respuesta')
-    // Convertir b64 a Blob
-    const bin=atob(b64);const arr=new Uint8Array(bin.length)
-    for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i)
-    return new Blob([arr],{type:'image/png'})
-  }catch(e){throw e}
-}
-
 /* ═══ PDF POR FICHAS — una página por producto ═══ */
 function generarCatalogoPDF(productos, empresa, linea){
   const prods=productos.filter(p=>p.cantidad>0)
@@ -240,19 +211,44 @@ export default function App(){
   const [notif,setNotif]=useState(null)
   const [editP,setEditP]=useState(null)
   const [ventaP,setVentaP]=useState(null)
+  const [sharedPhoto,setSharedPhoto]=useState(null)
 
   const notify=(m,t='success')=>{setNotif({m,t});setTimeout(()=>setNotif(null),3500)}
+  const fromShareRef=useRef(false)
 
   useEffect(()=>{
-    const h=()=>{if(scr!=='catalogo'&&scr!=='access'){setScr('catalogo')}else{window.history.pushState(null,'',window.location.href)}}
+    const h=()=>{
+      if(fromShareRef.current){window.history.pushState(null,'',window.location.href);return}
+      if(scr!=='catalogo'&&scr!=='access'){setScr('catalogo')}else{window.history.pushState(null,'',window.location.href)}
+    }
     window.history.pushState(null,'',window.location.href)
     window.addEventListener('popstate',h)
     return()=>window.removeEventListener('popstate',h)
   },[scr])
 
+  const checkSharedPhoto=async()=>{
+    try{
+      const cache=await caches.open('share-target-v1')
+      const resp=await cache.match('/shared-photo')
+      if(resp){const blob=await resp.blob();await cache.delete('/shared-photo');return new File([blob],'shared.jpg',{type:blob.type||'image/jpeg'})}
+    }catch(e){}
+    return null
+  }
+
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search)
-    if(params.get('share')==='true'){setScr('registrar')}
+    if(params.get('shared')==='true'||params.get('share')==='true'){
+      // Bloquear popstate por 3 segundos mientras se estabiliza el redirect
+      fromShareRef.current=true
+      setTimeout(()=>{fromShareRef.current=false},3000)
+      window.history.replaceState({},'','/')
+      setTimeout(()=>{
+        checkSharedPhoto().then(file=>{
+          if(file)setSharedPhoto(file)
+          setScr('registrar')
+        })
+      },400)
+    }
   },[])
 
   useEffect(()=>{const k=localStorage.getItem('ia_key');if(k)loginKey(k)},[])
@@ -260,7 +256,7 @@ export default function App(){
   const loginKey=async(k)=>{
     setLoading(true)
     const{data}=await supabase.from('empresas').select('*').eq('access_key',k).eq('activo',true).single()
-    if(data){setEmp(data);localStorage.setItem('ia_key',k);await loadAll(data.id);setScr('catalogo')}
+    if(data){setEmp(data);localStorage.setItem('ia_key',k);await loadAll(data.id);if(!fromShareRef.current)setScr('catalogo')}
     else{notify('Clave inválida','error');localStorage.removeItem('ia_key')}
     setLoading(false)
   }
@@ -295,7 +291,7 @@ export default function App(){
         boxShadow:'0 4px 15px rgba(0,0,0,0.2)'}}>{notif.m}</div>}
       {scr==='access'&&<AccessScreen login={loginKey} loading={loading}/>}
       {scr==='catalogo'&&<CatalogoScreen {...P}/>}
-      {scr==='registrar'&&<RegistrarScreen {...P} editP={editP}/>}
+      {scr==='registrar'&&<RegistrarScreen {...P} editP={editP} sharedPhoto={sharedPhoto} clearSharedPhoto={()=>setSharedPhoto(null)}/>}
       {scr==='buscar'&&<BuscarScreen {...P}/>}
       {scr==='venta'&&<VentaScreen {...P} prod={ventaP}/>}
       {scr==='submenu'&&<SubMenu {...P}/>}
@@ -383,178 +379,10 @@ function VoiceBtn({onResult}){
       color:G.gold,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>{rec?'🔴 Escuchando...':'🎤'}</button>)
 }
 
-/* ═══ PHOTO VIEWER MODAL ═══ */
-function PhotoViewerModal({prod,emp,notify,loadAll,onClose}){
-  const[fotos,setFotos]=useState([])
-  const[idx,setIdx]=useState(0)
-  const[mejorando,setMejorando]=useState(false)
-  const[cargando,setCargando]=useState(true)
-
-  const cargarFotos=async()=>{
-    setCargando(true)
-    const{data}=await supabase.from('fotos_producto')
-      .select('*').eq('producto_id',prod.id).order('orden',{ascending:true})
-    if(data?.length){
-      setFotos(data)
-      const pi=data.findIndex(f=>f.es_principal)
-      setIdx(pi>=0?pi:0)
-    }else if(prod.foto_url){
-      setFotos([{id:null,url:prod.foto_url,es_principal:true,producto_id:prod.id}])
-    }else{
-      setFotos([])
-    }
-    setCargando(false)
-  }
-
-  useEffect(()=>{cargarFotos()},[])
-
-  const marcarPrincipal=async(foto)=>{
-    if(!foto.id){notify('Esta es la única foto y ya es principal','error');return}
-    await supabase.from('fotos_producto').update({es_principal:false}).eq('producto_id',prod.id)
-    await supabase.from('fotos_producto').update({es_principal:true}).eq('id',foto.id)
-    await supabase.from('productos').update({foto_url:foto.url}).eq('id',prod.id)
-    notify('⭐ Foto principal actualizada')
-    await loadAll()
-    await cargarFotos()
-  }
-
-  const eliminar=async(foto)=>{
-    if(!confirm('¿Eliminar esta foto del producto?'))return
-    if(foto.id){
-      await supabase.from('fotos_producto').delete().eq('id',foto.id)
-      // Si era principal, promover la siguiente
-      if(foto.es_principal){
-        const resto=fotos.filter(f=>f.id!==foto.id)
-        if(resto.length>0){
-          const sig=resto[0]
-          if(sig.id)await supabase.from('fotos_producto').update({es_principal:true}).eq('id',sig.id)
-          await supabase.from('productos').update({foto_url:sig.url}).eq('id',prod.id)
-        }else{
-          await supabase.from('productos').update({foto_url:null}).eq('id',prod.id)
-        }
-      }
-    }else{
-      // Solo existe en foto_url (sin registro en fotos_producto)
-      await supabase.from('productos').update({foto_url:null}).eq('id',prod.id)
-    }
-    notify('Foto eliminada')
-    await loadAll()
-    const nf=fotos.filter(f=>f!==foto)
-    setFotos(nf)
-    if(nf.length===0){onClose();return}
-    setIdx(Math.max(0,Math.min(idx,nf.length-1)))
-  }
-
-  const mejorar=async(foto)=>{
-    if(!emp?.api_openai_key)return
-    setMejorando(true)
-    try{
-      const resp=await fetch(foto.url)
-      if(!resp.ok)throw new Error('No se pudo descargar la foto')
-      const blob=await resp.blob()
-      const mejorada=await mejorarFotoConIA(blob,emp.api_openai_key)
-      const nuevaUrl=await subirFoto(mejorada,'mejora_'+prod.codigo+'_'+Date.now())
-      if(foto.id){
-        await supabase.from('fotos_producto').update({url:nuevaUrl}).eq('id',foto.id)
-        if(foto.es_principal)await supabase.from('productos').update({foto_url:nuevaUrl}).eq('id',prod.id)
-      }else{
-        await supabase.from('productos').update({foto_url:nuevaUrl}).eq('id',prod.id)
-      }
-      notify('✨ Foto mejorada con IA')
-      await loadAll()
-      await cargarFotos()
-    }catch(e){notify('Error: '+e.message,'error')}
-    setMejorando(false)
-  }
-
-  // Touch swipe
-  const touchX=useRef(null)
-  const onTouchStart=e=>touchX.current=e.touches[0].clientX
-  const onTouchEnd=e=>{
-    if(touchX.current===null)return
-    const dx=e.changedTouches[0].clientX-touchX.current
-    if(Math.abs(dx)>50){if(dx<0&&idx<fotos.length-1)setIdx(idx+1);else if(dx>0&&idx>0)setIdx(idx-1)}
-    touchX.current=null
-  }
-
-  const fAct=fotos[idx]
-
-  return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.97)',zIndex:9500,display:'flex',flexDirection:'column'}}
-    onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-    {/* Header */}
-    <div style={{padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0,borderBottom:'1px solid rgba(255,255,255,0.1)'}}>
-      <div>
-        <p style={{color:G.gold,fontSize:10,margin:0,fontWeight:700}}>{prod.codigo}</p>
-        <p style={{color:'#fff',fontSize:13,margin:0,fontWeight:600,lineHeight:1.2}}>{prod.nombre}</p>
-        <p style={{color:'#888',fontSize:10,margin:0}}>S/{prod.precio_venta} • Stock: {prod.cantidad}</p>
-      </div>
-      <button onClick={onClose} style={{background:'rgba(255,255,255,0.1)',border:'none',color:'#fff',fontSize:20,cursor:'pointer',width:36,height:36,borderRadius:18,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
-    </div>
-
-    {/* Foto principal */}
-    <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',position:'relative',overflow:'hidden',minHeight:0}}>
-      {cargando?(<div style={{color:'#888',textAlign:'center'}}><p style={{fontSize:32}}>⏳</p><p style={{fontSize:12}}>Cargando fotos...</p></div>
-      ):fAct?(
-        <img src={fAct.url} alt="" style={{maxWidth:'94%',maxHeight:'94%',objectFit:'contain',borderRadius:8}}/>
-      ):(
-        <div style={{color:'#555',textAlign:'center'}}>
-          <p style={{fontSize:48}}>📦</p>
-          <p style={{fontSize:13}}>Sin fotos</p>
-        </div>
-      )}
-      {/* Flechas nav */}
-      {fotos.length>1&&idx>0&&(
-        <button onClick={()=>setIdx(idx-1)} style={{position:'absolute',left:6,top:'50%',transform:'translateY(-50%)',background:'rgba(0,0,0,0.55)',border:'none',color:'#fff',fontSize:26,width:44,height:44,borderRadius:22,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
-      )}
-      {fotos.length>1&&idx<fotos.length-1&&(
-        <button onClick={()=>setIdx(idx+1)} style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',background:'rgba(0,0,0,0.55)',border:'none',color:'#fff',fontSize:26,width:44,height:44,borderRadius:22,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>›</button>
-      )}
-      {/* Badge principal */}
-      {fAct?.es_principal&&(
-        <div style={{position:'absolute',top:8,left:8,background:G.gold,color:'#fff',padding:'3px 8px',borderRadius:6,fontSize:9,fontWeight:700}}>⭐ PRINCIPAL</div>
-      )}
-      {/* Contador */}
-      {fotos.length>1&&(
-        <div style={{position:'absolute',top:8,right:8,background:'rgba(0,0,0,0.6)',color:'#fff',padding:'3px 8px',borderRadius:6,fontSize:10}}>
-          {idx+1}/{fotos.length}
-        </div>
-      )}
-    </div>
-
-    {/* Dots */}
-    {fotos.length>1&&(
-      <div style={{display:'flex',justifyContent:'center',gap:6,padding:'8px 0',flexShrink:0}}>
-        {fotos.map((_,i)=>(
-          <div key={i} onClick={()=>setIdx(i)} style={{width:i===idx?20:8,height:8,borderRadius:4,background:i===idx?G.gold:'#444',cursor:'pointer',transition:'all 0.2s'}}/>
-        ))}
-      </div>
-    )}
-
-    {/* Acciones */}
-    {fAct&&(
-      <div style={{padding:'10px 12px 16px',background:'rgba(0,0,0,0.5)',flexShrink:0,borderTop:'1px solid rgba(255,255,255,0.08)'}}>
-        <div style={{display:'flex',gap:6}}>
-          {!fAct.es_principal&&fAct.id&&(
-            <button onClick={()=>marcarPrincipal(fAct)} style={{flex:1,padding:'9px 4px',borderRadius:8,border:'none',background:G.gold,color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer'}}>⭐ Principal</button>
-          )}
-          {emp?.api_openai_key&&(
-            <button onClick={()=>mejorar(fAct)} disabled={mejorando} style={{flex:1,padding:'9px 4px',borderRadius:8,border:'none',background:mejorando?'#555':'#6C47FF',color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer'}}>
-              {mejorando?'⏳':'✨ Mejorar IA'}
-            </button>
-          )}
-          <button onClick={()=>downloadPhoto(fAct.url,prod.codigo+(fotos.length>1?'_'+(idx+1):'' ))} style={{flex:1,padding:'9px 4px',borderRadius:8,border:'none',background:'#333',color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer'}}>📥 Descargar</button>
-          <button onClick={()=>eliminar(fAct)} style={{flex:1,padding:'9px 4px',borderRadius:8,border:'none',background:'#C0392B',color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer'}}>🗑 Eliminar</button>
-        </div>
-      </div>
-    )}
-  </div>)
-}
-
 /* ═══ CATÁLOGO ═══ */
 function CatalogoScreen(P){
-  const{tit,lineas,linAct,setLinAct,prods,allProds,setScr,setEditP,setVentaP,logout,notify,loadAll,emp}=P
+  const{tit,lineas,linAct,setLinAct,prods,allProds,setScr,setEditP,setVentaP,logout,notify,emp}=P
   const[f,setF]=useState('')
-  const[viewerProd,setViewerProd]=useState(null)
   const fl=prods.filter(p=>!f||p.nombre?.toLowerCase().includes(f.toLowerCase())||p.codigo?.toLowerCase().includes(f.toLowerCase()))
 
   const eliminar=async(p)=>{
@@ -576,7 +404,6 @@ function CatalogoScreen(P){
   }
 
   return(<div>
-    {viewerProd&&<PhotoViewerModal prod={viewerProd} emp={emp} notify={notify} loadAll={loadAll} onClose={()=>setViewerProd(null)}/>}
     <div style={{background:G.gold,padding:'16px 16px 20px'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
         <div><p style={{color:'rgba(255,255,255,0.8)',fontSize:10,margin:0}}>{emp?.nombre}</p>
@@ -597,11 +424,8 @@ function CatalogoScreen(P){
       <button onClick={()=>setScr('registrar')} style={{marginTop:12,padding:'10px 24px',borderRadius:10,border:'none',background:G.gold,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer'}}>➕ Registrar</button></div>
     ):(<div style={{padding:'8px 12px 16px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
       {fl.map(p=>(<div key={p.id} style={{background:'#fff',borderRadius:12,overflow:'hidden',boxShadow:'0 1px 6px rgba(0,0,0,0.08)',border:'1px solid '+G.border}}>
-        <div onClick={()=>setViewerProd(p)} style={{cursor:'pointer',position:'relative'}}>
-          {p.foto_url?<img src={p.foto_url} alt="" style={{width:'100%',height:130,objectFit:'cover'}}/>
-          :<div style={{width:'100%',height:130,background:G.goldLt,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:36,opacity:0.3}}>📦</span></div>}
-          <div style={{position:'absolute',bottom:4,right:4,background:'rgba(0,0,0,0.45)',borderRadius:6,padding:'2px 6px',fontSize:9,color:'#fff',pointerEvents:'none'}}>👁 Ver</div>
-        </div>
+        {p.foto_url?<img src={p.foto_url} alt="" style={{width:'100%',height:130,objectFit:'cover'}}/>
+        :<div style={{width:'100%',height:130,background:G.goldLt,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:36,opacity:0.3}}>📦</span></div>}
         <div style={{padding:8}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'start'}}>
             <span style={{fontSize:9,background:G.goldSf,color:G.goldDk,padding:'2px 6px',borderRadius:4,fontWeight:600}}>{p.codigo}</span>
@@ -666,6 +490,16 @@ function RegistrarScreen(P){
   useEffect(()=>{
     if(emp?.codigo_auto&&!ep)calcAutoCode()
   },[])
+
+  // Cargar foto compartida desde Android Share Target
+  useEffect(()=>{
+    if(P.sharedPhoto&&!ep){
+      setFotoFile(P.sharedPhoto)
+      const r=new FileReader();r.onload=e=>setFotoPrev(e.target.result);r.readAsDataURL(P.sharedPhoto)
+      P.clearSharedPhoto()
+      notify('📸 Foto cargada — completa los datos del producto')
+    }
+  },[P.sharedPhoto])
 
   const catSel=cats.find(c=>c.id===parseInt(f.categoria_id))
   const _parseArr=(v)=>{if(!v)return[];try{return typeof v==='string'?JSON.parse(v):Array.isArray(v)?v:[]}catch(e){return[]}}
@@ -1235,9 +1069,8 @@ function CatsScr(P){
   const[nombre,setNombre]=useState('')
   const[tallasStr,setTallasStr]=useState('')
 
-  const _parseTallas=(v)=>{try{return JSON.parse(v)}catch(e){return[]}}
   const abrir=c=>{if(c){setEditCat(c);setNombre(c.nombre)
-    const t=c.tallas;const arr=!t?[]:typeof t==='string'?_parseTallas(t):Array.isArray(t)?t:[]
+    const t=c.tallas;const arr=!t?[]:typeof t==='string'?_parseArr(t):Array.isArray(t)?t:[]
     setTallasStr(arr.join(', '))}
     else{setEditCat(null);setNombre('');setTallasStr('')};setShowAdd(true)}
 
