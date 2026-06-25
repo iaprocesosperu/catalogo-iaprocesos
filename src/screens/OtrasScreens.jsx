@@ -39,7 +39,8 @@ export function OrigenesScr(P) {
 
   const guardar = async () => {
     if (!f.nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
-    const data = { empresa_id: eid, linea_id: lid, nombre: f.nombre.trim(), cantidad: parseInt(f.cantidad) || 0, precio_costo_defecto: parseFloat(f.precio_costo_defecto) || null, precio_venta_defecto: parseFloat(f.precio_venta_defecto) || null, fecha: f.fecha || null, observaciones: f.observaciones || null }
+    const data = { empresa_id: eid, linea_id: lid, nombre: f.nombre.trim(), cantidad: parseInt(f.cantidad) || 0, precio_costo_defecto: parseFloat(f.precio_costo_defecto) || null, precio_venta_defecto: parseFloat(f.precio_venta_defecto) || null, fecha: f.fecha || null, observaciones: f.observaciones || null, estado: editId ? undefined : 'activo' }
+    if (data.estado === undefined) delete data.estado
     if (editId) { await supabase.from('origenes').update(data).eq('id', editId); notify('Actualizado') }
     else { await supabase.from('origenes').insert(data); notify('Agregado') }
     setShowAdd(false); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '' }); await loadAll()
@@ -101,7 +102,14 @@ export function OrigenesScr(P) {
           <div key={o.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
               <div>
-                <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{o.nombre}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{o.nombre}</p>
+                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                    background: o.estado === 'cerrado' ? '#FEE2E2' : o.estado === 'observado' ? '#FEF3C7' : '#D1FAE5',
+                    color: o.estado === 'cerrado' ? G.err : o.estado === 'observado' ? '#92400E' : '#065F46' }}>
+                    {o.estado === 'cerrado' ? '🔴 Cerrado' : o.estado === 'observado' ? '⚠️ Observado' : '🟢 Activo'}
+                  </span>
+                </div>
                 <p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{o.cantidad ? o.cantidad + ' items' : ''} {o.precio_costo_defecto ? '• C: S/' + o.precio_costo_defecto : ''} {o.precio_venta_defecto ? 'V: S/' + o.precio_venta_defecto : ''}{o.cantidad && o.precio_costo_defecto ? ' • Inv: S/' + (o.cantidad * o.precio_costo_defecto).toFixed(0) : ''} {o.fecha ? ' • ' + o.fecha : ''}</p>
                 {o.observaciones && <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{o.observaciones}</p>}
               </div>

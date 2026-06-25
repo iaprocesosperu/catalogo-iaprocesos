@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase, subirFoto } from '../supabase'
+import { supabase, subirFoto, comprimirImagen } from '../supabase'
 import { G } from '../constants'
 import { downloadPhoto, mejorarFotoConIA } from '../helpers'
+import { CamModal } from './index'
 
 export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }) {
   const [fotos, setFotos] = useState([])
   const [idx, setIdx] = useState(0)
   const [mejorando, setMejorando] = useState(false)
+  const [agregando, setAgregando] = useState(false)
   const [cargando, setCargando] = useState(true)
+  const [cam, setCam] = useState(false)
+  const fileRef = useRef(null)
 
   const cargarFotos = async () => {
     setCargando(true)
@@ -27,14 +31,38 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
 
   useEffect(() => { cargarFotos() }, [])
 
+  const agregarFoto = async (fileOrBlob) => {
+    setAgregando(true)
+    try {
+      const blob = await comprimirImagen(fileOrBlob instanceof File ? fileOrBlob : new File([fileOrBlob], 'f.jpg', { type: 'image/jpeg' }), 800)
+      const esPrimera = fotos.length === 0
+      const url = await subirFoto(blob, prod.codigo + '_' + Date.now())
+      const { data } = await supabase.from('fotos_producto').insert({
+        producto_id: prod.id, empresa_id: prod.empresa_id,
+        url, es_principal: esPrimera, orden: fotos.length
+      }).select().single()
+      if (esPrimera) await supabase.from('productos').update({ foto_url: url }).eq('id', prod.id)
+      notify('✅ Foto agregada')
+      await loadAll()
+      await cargarFotos()
+      setIdx(fotos.length) // ir a la nueva foto
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setAgregando(false)
+  }
+
+  const onCamCapture = async (b) => { setCam(false); await agregarFoto(b) }
+  const onFileSelect = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    e.target.value = ''; await agregarFoto(file)
+  }
+
   const marcarPrincipal = async (foto) => {
     if (!foto.id) { notify('Esta es la única foto y ya es principal', 'error'); return }
     await supabase.from('fotos_producto').update({ es_principal: false }).eq('producto_id', prod.id)
     await supabase.from('fotos_producto').update({ es_principal: true }).eq('id', foto.id)
     await supabase.from('productos').update({ foto_url: foto.url }).eq('id', prod.id)
     notify('⭐ Foto principal actualizada')
-    await loadAll()
-    await cargarFotos()
+    await loadAll(); await cargarFotos()
   }
 
   const eliminar = async (foto) => {
@@ -78,8 +106,7 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
         await supabase.from('productos').update({ foto_url: nuevaUrl }).eq('id', prod.id)
       }
       notify('✨ Foto mejorada con IA')
-      await loadAll()
-      await cargarFotos()
+      await loadAll(); await cargarFotos()
     } catch (e) { notify('Error: ' + e.message, 'error') }
     setMejorando(false)
   }
@@ -99,12 +126,15 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.97)', zIndex: 9500, display: 'flex', flexDirection: 'column' }}
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
 
+      {cam && <CamModal onCapture={onCamCapture} onClose={() => setCam(false)} />}
+      <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFileSelect} style={{ display: 'none' }} />
+
       {/* Header */}
       <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
         <div>
           <p style={{ color: G.gold, fontSize: 10, margin: 0, fontWeight: 700 }}>{prod.codigo}</p>
           <p style={{ color: '#fff', fontSize: 13, margin: 0, fontWeight: 600, lineHeight: 1.2 }}>{prod.nombre}</p>
-          <p style={{ color: '#888', fontSize: 10, margin: 0 }}>S/{prod.precio_venta} • Stock: {prod.cantidad}</p>
+          <p style={{ color: '#888', fontSize: 10, margin: 0 }}>S/{prod.precio_venta} • Stock: {prod.cantidad} • {fotos.length} foto{fotos.length !== 1 ? 's' : ''}</p>
         </div>
         <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', width: 36, height: 36, borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
       </div>
@@ -116,7 +146,10 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
         ) : fAct ? (
           <img src={fAct.url} alt="" style={{ maxWidth: '94%', maxHeight: '94%', objectFit: 'contain', borderRadius: 8 }} />
         ) : (
-          <div style={{ color: '#555', textAlign: 'center' }}><p style={{ fontSize: 48 }}>📦</p><p style={{ fontSize: 13 }}>Sin fotos</p></div>
+          <div style={{ color: '#555', textAlign: 'center' }}>
+            <p style={{ fontSize: 48 }}>📦</p>
+            <p style={{ fontSize: 13 }}>Sin fotos — agrega una abajo</p>
+          </div>
         )}
         {fotos.length > 1 && idx > 0 && (
           <button onClick={() => setIdx(idx - 1)} style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', fontSize: 26, width: 44, height: 44, borderRadius: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
@@ -141,9 +174,9 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
         </div>
       )}
 
-      {/* Acciones */}
+      {/* Acciones foto actual */}
       {fAct && (
-        <div style={{ padding: '10px 12px 16px', background: 'rgba(0,0,0,0.5)', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ padding: '8px 12px 4px', background: 'rgba(0,0,0,0.5)', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           <div style={{ display: 'flex', gap: 6 }}>
             {!fAct.es_principal && fAct.id && (
               <button onClick={() => marcarPrincipal(fAct)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>⭐ Principal</button>
@@ -153,11 +186,24 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
                 {mejorando ? '⏳' : '✨ Mejorar IA'}
               </button>
             )}
-            <button onClick={() => downloadPhoto(fAct.url, prod.codigo + (fotos.length > 1 ? '_' + (idx + 1) : ''))} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#333', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>📥 Descargar</button>
-            <button onClick={() => eliminar(fAct)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#C0392B', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>🗑 Eliminar</button>
+            <button onClick={() => downloadPhoto(fAct.url, prod.codigo + (fotos.length > 1 ? '_' + (idx + 1) : ''))} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#333', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>📥</button>
+            <button onClick={() => eliminar(fAct)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#C0392B', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>🗑</button>
           </div>
         </div>
       )}
+
+      {/* Agregar fotos */}
+      <div style={{ padding: '8px 12px 14px', background: 'rgba(0,0,0,0.5)', flexShrink: 0 }}>
+        <p style={{ color: '#666', fontSize: 9, margin: '0 0 6px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 1 }}>Agregar foto</p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setCam(true)} disabled={agregando} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px dashed rgba(197,165,90,0.5)', background: 'rgba(197,165,90,0.1)', color: G.gold, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            {agregando ? '⏳ Subiendo...' : '📷 Cámara'}
+          </button>
+          <button onClick={() => fileRef.current?.click()} disabled={agregando} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: '#aaa', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            📁 Galería
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

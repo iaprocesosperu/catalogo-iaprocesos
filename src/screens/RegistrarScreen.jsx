@@ -14,12 +14,15 @@ export default function RegistrarScreen(P) {
     categoria_id: ep.categoria_id || '', origen_id: ep.origen_id || '', observacion: ep.observacion || '',
     atributos: ep.atributos || {}
   } : { codigo: '', nombre: '', precio_costo: '', precio_venta: '', color: '', cantidad: '1', categoria_id: '', origen_id: '', observacion: '', atributos: {} })
-  const [fotoFile, setFotoFile] = useState(null)
-  const [fotoPrev, setFotoPrev] = useState(ep?.foto_url || null)
+
+  // ── FOTOS (múltiples) ──
+  // Cada entrada: { id, url, es_principal, esNueva, file }
+  const [fotos, setFotos] = useState([])
+  const [fotosEliminadas, setFotosEliminadas] = useState([]) // ids a eliminar al guardar
   const [saving, setSaving] = useState(false)
   const [ocrLoad, setOcrLoad] = useState(false)
   const [detecting, setDetecting] = useState(false)
-  const [cam, setCam] = useState(null)
+  const [cam, setCam] = useState(null) // 'label' | 'foto'
   const [colSrch, setColSrch] = useState('')
   const [fileKey, setFileKey] = useState(0)
   const [showNewCat, setShowNewCat] = useState(false)
@@ -34,6 +37,21 @@ export default function RegistrarScreen(P) {
   const sE = k => ({ ...sS(G), border: `1px solid ${errFields.includes(k) ? G.err : G.border}` })
   const s = (k, v) => { setF(p => ({ ...p, [k]: v })); setErrFields(prev => prev.filter(e => e !== k)) }
   const sA = (k, v) => setF(p => ({ ...p, atributos: { ...p.atributos, [k]: v } }))
+
+  // Cargar fotos existentes en modo editar
+  useEffect(() => {
+    if (!ep) return
+    const cargar = async () => {
+      const { data } = await supabase.from('fotos_producto')
+        .select('*').eq('producto_id', ep.id).order('orden', { ascending: true })
+      if (data?.length) {
+        setFotos(data.map(f => ({ id: f.id, url: f.url, es_principal: f.es_principal, esNueva: false, file: null })))
+      } else if (ep.foto_url) {
+        setFotos([{ id: null, url: ep.foto_url, es_principal: true, esNueva: false, file: null }])
+      }
+    }
+    cargar()
+  }, [])
 
   const calcAutoCode = async () => {
     const { data } = await supabase.from('productos').select('codigo').eq('empresa_id', eid)
@@ -57,16 +75,37 @@ export default function RegistrarScreen(P) {
     const a = pts.filter(Boolean).join(' '); if (a) s('nombre', a)
   }, [f.categoria_id, f.color, f.atributos, cats])
 
-  const onOrigenChange = v => {
+  // Control de unidades por origen
+  const onOrigenChange = async (v) => {
     s('origen_id', v)
     const o = oris.find(x => x.id === parseInt(v))
     if (o) {
       if (o.precio_costo_defecto && !f.precio_costo) s('precio_costo', String(o.precio_costo_defecto))
       if (o.precio_venta_defecto && !f.precio_venta) s('precio_venta', String(o.precio_venta_defecto))
+      // Verificar capacidad
+      if (o.cantidad) {
+        const { count } = await supabase.from('productos').select('id', { count: 'exact', head: true })
+          .eq('empresa_id', eid).eq('origen_id', o.id).eq('activo', true)
+        const usado = count || 0
+        const pct = usado / o.cantidad
+        if (pct >= 1) {
+          notify(`⚠️ ${o.nombre} está lleno (${usado}/${o.cantidad}). Se marcará como observado.`, 'error')
+          await supabase.from('origenes').update({ estado: 'observado' }).eq('id', o.id)
+          await loadAll()
+        } else if (pct >= 0.8) {
+          notify(`⚠️ ${o.nombre} casi lleno: ${usado}/${o.cantidad} unidades usadas`)
+        }
+      }
     }
   }
 
-  const onCamCapture = async b => {
+  // ── FOTOS helpers ──
+  const agregarFotoDesdeBlob = async (blob, nombre) => {
+    const prev = URL.createObjectURL(blob)
+    setFotos(fs => [...fs, { id: null, url: prev, es_principal: fs.length === 0, esNueva: true, file: new File([blob], nombre || 'foto.jpg', { type: 'image/jpeg' }) }])
+  }
+
+  const onCamCapture = async (b) => {
     if (cam === 'label') {
       setCam(null); setOcrLoad(true)
       try {
@@ -78,17 +117,49 @@ export default function RegistrarScreen(P) {
         else notify('No se pudo leer', 'error')
       } catch (e) { notify('Error OCR', 'error') }
       setOcrLoad(false)
-    } else if (cam === 'product') {
-      setCam(null); setFotoFile(new File([b], 'p.jpg', { type: 'image/jpeg' }))
-      const r = new FileReader(); r.onload = e => setFotoPrev(e.target.result); r.readAsDataURL(b)
+    } else if (cam === 'foto') {
+      setCam(null); await agregarFotoDesdeBlob(b, 'cam.jpg')
     }
   }
-  const onFileSelect = e => {
-    const file = e.target.files?.[0]; if (!file) return
-    setFotoFile(file); const r = new FileReader()
-    r.onload = ev => setFotoPrev(ev.target.result); r.readAsDataURL(file); e.target.value = ''
+
+  const onFileSelect = async (e) => {
+    const files = Array.from(e.target.files || []); if (!files.length) return
+    for (const file of files) await agregarFotoDesdeBlob(file, file.name)
+    e.target.value = ''
   }
-  const clearFoto = () => { setFotoPrev(null); setFotoFile(null); setFileKey(k => k + 1) }
+
+  const marcarPrincipal = (idx) => {
+    setFotos(fs => fs.map((f, i) => ({ ...f, es_principal: i === idx })))
+  }
+
+  const eliminarFoto = (idx) => {
+    const foto = fotos[idx]
+    if (foto.id) setFotosEliminadas(prev => [...prev, foto.id])
+    setFotos(fs => {
+      const nf = fs.filter((_, i) => i !== idx)
+      // Si era principal, marcar la primera como principal
+      if (foto.es_principal && nf.length > 0) nf[0].es_principal = true
+      return nf
+    })
+  }
+
+  const autoDetect = async () => {
+    const principal = fotos.find(f => f.es_principal) || fotos[0]
+    if (!principal) return
+    setDetecting(true)
+    try {
+      const color = await detectColor(principal.url); if (color) s('color', color)
+      if (principal.file) {
+        const comp = await comprimirImagen(principal.file, 600); const b64 = await blobToBase64(comp)
+        const fd = new FormData(); fd.append('base64Image', 'data:image/jpeg;base64,' + b64); fd.append('OCREngine', '3')
+        const r = await fetch('https://api.ocr.space/parse/image', { method: 'POST', headers: { 'apikey': 'K85837551988957' }, body: fd })
+        const d = await r.json(); const txt = (d?.ParsedResults?.[0]?.ParsedText || '').trim()
+        if (txt) { const m = txt.match(/[SMLX]{1,3}/i); if (m) sA('talla', m[0].toUpperCase()); notify('Detectado: Color ' + color + (m ? ' Talla ' + m[0].toUpperCase() : '')) }
+        else notify('Color detectado: ' + color)
+      } else notify('Color detectado: ' + color)
+    } catch (e) { notify('Error al detectar', 'error') }
+    setDetecting(false)
+  }
 
   const crearCatRapido = async () => {
     if (!newCatName.trim()) return
@@ -105,21 +176,7 @@ export default function RegistrarScreen(P) {
     await loadAll(); s('color', newColName.trim()); setColSrch(''); setShowNewCol(false); setNewColName(''); notify('Color creado')
   }
 
-  const autoDetect = async () => {
-    if (!fotoPrev) return; setDetecting(true)
-    try {
-      const color = await detectColor(fotoPrev); if (color) s('color', color)
-      const comp = await comprimirImagen(fotoFile || new File([], 'x'), 600)
-      const b64 = await blobToBase64(comp)
-      const fd = new FormData(); fd.append('base64Image', 'data:image/jpeg;base64,' + b64); fd.append('OCREngine', '3')
-      const r = await fetch('https://api.ocr.space/parse/image', { method: 'POST', headers: { 'apikey': 'K85837551988957' }, body: fd })
-      const d = await r.json(); const txt = (d?.ParsedResults?.[0]?.ParsedText || '').trim()
-      if (txt) { const m = txt.match(/[SMLX]{1,3}/i); if (m) sA('talla', m[0].toUpperCase()); notify('Detectado: Color ' + color + (m ? ' Talla ' + m[0].toUpperCase() : '')) }
-      else notify('Color detectado: ' + color)
-    } catch (e) { notify('Error al detectar', 'error') }
-    setDetecting(false)
-  }
-
+  // ── GUARDAR ──
   const guardar = async (yNuevo = false) => {
     const errs = []
     if (!f.codigo) errs.push('codigo')
@@ -128,7 +185,6 @@ export default function RegistrarScreen(P) {
     if (!f.color) errs.push('color')
     if (!f.precio_venta) errs.push('precio_venta')
     if (!f.cantidad) errs.push('cantidad')
-
     if (errs.length > 0) {
       const nm = { codigo: 'Código', origen_id: 'Origen', categoria_id: 'Categoría', color: 'Color', precio_venta: 'Precio Venta', cantidad: 'Cantidad' }
       notify('Faltan campos: ' + errs.map(e => nm[e]).join(', '), 'error')
@@ -142,8 +198,22 @@ export default function RegistrarScreen(P) {
     }
     setSaving(true)
     try {
-      let foto_url = ep?.foto_url || null
-      if (fotoFile) { const blob = await comprimirImagen(fotoFile, 800); foto_url = await subirFoto(blob, f.codigo) }
+      // Subir fotos nuevas
+      const fotosSubidas = []
+      for (const foto of fotos) {
+        if (foto.esNueva && foto.file) {
+          const blob = await comprimirImagen(foto.file, 800)
+          const url = await subirFoto(blob, f.codigo + '_' + Date.now())
+          fotosSubidas.push({ ...foto, url })
+        } else {
+          fotosSubidas.push(foto)
+        }
+      }
+
+      // foto_url = la principal
+      const principal = fotosSubidas.find(f => f.es_principal) || fotosSubidas[0]
+      const foto_url = principal?.url || ep?.foto_url || null
+
       const data = {
         empresa_id: eid, linea_id: lid, categoria_id: f.categoria_id || null, origen_id: f.origen_id || null,
         codigo: f.codigo, nombre: f.nombre, precio_costo: parseFloat(f.precio_costo) || 0,
@@ -151,21 +221,57 @@ export default function RegistrarScreen(P) {
         color: f.color, atributos: f.atributos, observacion: f.observacion, foto_url,
         updated_at: new Date().toISOString()
       }
-      if (ep) { const { error } = await supabase.from('productos').update(data).eq('id', ep.id); if (error) throw error; notify('Actualizado') }
-      else { const { error } = await supabase.from('productos').insert(data); if (error) throw error; notify('Registrado') }
+
+      let prodId = ep?.id
+      if (ep) {
+        const { error } = await supabase.from('productos').update(data).eq('id', ep.id)
+        if (error) throw error
+        notify('Actualizado')
+      } else {
+        const { data: nuevo, error } = await supabase.from('productos').insert(data).select().single()
+        if (error) throw error
+        prodId = nuevo.id
+        notify('Registrado')
+      }
+
+      // Eliminar fotos marcadas
+      for (const id of fotosEliminadas) {
+        await supabase.from('fotos_producto').delete().eq('id', id)
+      }
+
+      // Guardar fotos nuevas en fotos_producto
+      const fotasNuevas = fotosSubidas.filter(f => f.esNueva)
+      for (let i = 0; i < fotasNuevas.length; i++) {
+        const foto = fotasNuevas[i]
+        await supabase.from('fotos_producto').insert({
+          producto_id: prodId, empresa_id: eid,
+          url: foto.url, es_principal: foto.es_principal, orden: i
+        })
+      }
+
+      // Actualizar es_principal en fotos existentes
+      const fotasExistentes = fotosSubidas.filter(f => !f.esNueva && f.id)
+      for (const foto of fotasExistentes) {
+        await supabase.from('fotos_producto').update({ es_principal: foto.es_principal }).eq('id', foto.id)
+      }
+
       await loadAll()
       if (yNuevo) {
         setF(p => ({ ...p, codigo: '', nombre: '', color: '', cantidad: '1', observacion: '', atributos: {} }))
-        setFotoFile(null); setFotoPrev(null)
+        setFotos([]); setFotosEliminadas([])
         if (emp?.codigo_auto) calcAutoCode()
       } else setScr('catalogo')
     } catch (e) { notify('Error: ' + e.message, 'error') }
     setSaving(false)
   }
 
+  // foto principal para auto-detectar y preview principal
+  const fotoPrincipal = fotos.find(f => f.es_principal) || fotos[0]
+
   return (
     <div>
-      {cam && <CamModal onCapture={onCamCapture} onClose={() => setCam(null)} />}
+      {cam && cam !== 'foto' ? null : null}
+      {(cam === 'label' || cam === 'foto') && <CamModal onCapture={onCamCapture} onClose={() => setCam(null)} />}
       <Hdr tit={tit} sec={ep ? '✏️ Editar' : '➕ Registrar'} onBack={() => setScr('catalogo')} />
       <div style={{ padding: 16 }}>
 
@@ -189,30 +295,50 @@ export default function RegistrarScreen(P) {
           {errFields.includes('codigo') && <p style={{ fontSize: 11, color: G.err, margin: '4px 0 0' }}>⚠ El código es obligatorio</p>}
         </Crd>
 
-        {/* 2. FOTO */}
-        <Crd title="2. Foto del producto">
-          {fotoPrev ? (
-            <div style={{ position: 'relative' }}>
-              <img src={fotoPrev} alt="" style={{ width: '100%', height: 180, objectFit: 'cover', borderRadius: 8 }} />
-              <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4 }}>
-                <button onClick={() => downloadPhoto(fotoPrev, f.codigo)} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: 8, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>📥</button>
-                <button onClick={clearFoto} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: 8, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>🔄 Cambiar</button>
-              </div>
-              <button onClick={autoDetect} disabled={detecting} style={{ position: 'absolute', bottom: 6, right: 6, background: G.gold, color: '#fff', border: 'none', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                {detecting ? '⏳' : '🔍 Auto-detectar'}
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setCam('product')} style={{ flex: 1, padding: 18, borderRadius: 8, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
-                <span style={{ fontSize: 22, display: 'block' }}>📷</span><span style={{ fontSize: 11, color: G.gold, fontWeight: 600 }}>Cámara</span>
-              </button>
-              <button onClick={() => fileRef.current?.click()} style={{ flex: 1, padding: 18, borderRadius: 8, border: '2px dashed ' + G.border, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
-                <span style={{ fontSize: 22, display: 'block' }}>📁</span><span style={{ fontSize: 11, color: G.muted, fontWeight: 600 }}>Galería</span>
-              </button>
+        {/* 2. FOTOS */}
+        <Crd title={`2. Fotos del producto${fotos.length > 0 ? ' (' + fotos.length + ')' : ''}`}>
+          {/* Grid de fotos actuales */}
+          {fotos.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 10 }}>
+              {fotos.map((foto, i) => (
+                <div key={i} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: foto.es_principal ? '2px solid ' + G.gold : '2px solid transparent' }}>
+                  <img src={foto.url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover' }} />
+                  {foto.es_principal && (
+                    <div style={{ position: 'absolute', top: 2, left: 2, background: G.gold, color: '#fff', fontSize: 8, padding: '1px 4px', borderRadius: 4, fontWeight: 700 }}>⭐</div>
+                  )}
+                  {foto.esNueva && (
+                    <div style={{ position: 'absolute', top: 2, right: 2, background: G.ok, color: '#fff', fontSize: 8, padding: '1px 4px', borderRadius: 4 }}>NEW</div>
+                  )}
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', background: 'rgba(0,0,0,0.6)' }}>
+                    {!foto.es_principal && (
+                      <button onClick={() => marcarPrincipal(i)} style={{ flex: 1, padding: '3px 0', border: 'none', background: 'transparent', color: G.gold, fontSize: 10, cursor: 'pointer' }}>⭐</button>
+                    )}
+                    <button onClick={() => eliminarFoto(i)} style={{ flex: 1, padding: '3px 0', border: 'none', background: 'transparent', color: '#ff6b6b', fontSize: 10, cursor: 'pointer' }}>🗑</button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-          <input key={fileKey} ref={fileRef} type="file" accept="image/*" onChange={onFileSelect} style={{ display: 'none' }} />
+
+          {/* Botones agregar */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setCam('foto')} style={{ flex: 1, padding: fotos.length > 0 ? 10 : 18, borderRadius: 8, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
+              <span style={{ fontSize: fotos.length > 0 ? 18 : 22, display: 'block' }}>📷</span>
+              <span style={{ fontSize: 11, color: G.gold, fontWeight: 600 }}>Cámara</span>
+            </button>
+            <button onClick={() => fileRef.current?.click()} style={{ flex: 1, padding: fotos.length > 0 ? 10 : 18, borderRadius: 8, border: '2px dashed ' + G.border, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
+              <span style={{ fontSize: fotos.length > 0 ? 18 : 22, display: 'block' }}>📁</span>
+              <span style={{ fontSize: 11, color: G.muted, fontWeight: 600 }}>Galería</span>
+            </button>
+          </div>
+          <input key={fileKey} ref={fileRef} type="file" accept="image/*" multiple onChange={onFileSelect} style={{ display: 'none' }} />
+
+          {/* Auto-detectar */}
+          {fotoPrincipal && (
+            <button onClick={autoDetect} disabled={detecting} style={{ width: '100%', marginTop: 8, padding: '8px', borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              {detecting ? '⏳ Detectando...' : '🔍 Auto-detectar color y talla'}
+            </button>
+          )}
         </Crd>
 
         {/* 3. DATOS */}
