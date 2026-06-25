@@ -5,6 +5,7 @@ import { downloadPhoto, mejorarFotoConIA } from '../helpers'
 import { CamModal } from './index'
 
 export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }) {
+  const empresaId = emp?.id || 'default'
   const [fotos, setFotos] = useState([])
   const [idx, setIdx] = useState(0)
   const [mejorando, setMejorando] = useState(false)
@@ -99,7 +100,7 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
       const resp = await fetch(foto.url)
       if (!resp.ok) throw new Error('No se pudo descargar la foto')
       const blob = await resp.blob()
-      const mejorada = await mejorarFotoConIA(blob, emp.api_openai_key)
+      const mejorada = await mejorarFotoConIA(blob, empresaId)
       const prevUrl = URL.createObjectURL(mejorada)
       // Guardar temporal — no sube hasta confirmar
       setFotoMejorada({ url: prevUrl, blob: mejorada, fotoOrig: foto })
@@ -125,6 +126,51 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
       await loadAll(); await cargarFotos()
     } catch (e) { notify('Error al guardar: ' + e.message, 'error') }
     setMejorando(false)
+  }
+
+  const mantenerAmbas = async () => {
+    if (!fotoMejorada) return
+    setMejorando(true)
+    try {
+      // Subir mejorada como nueva foto (principal)
+      const nuevaUrl = await subirFoto(fotoMejorada.blob, 'mejora_' + prod.codigo + '_' + Date.now())
+      // Insertar mejorada como principal
+      await supabase.from('fotos_producto').insert({
+        producto_id: prod.id, empresa_id: prod.empresa_id,
+        url: nuevaUrl, es_principal: true, orden: 0
+      })
+      // Original pasa a no-principal
+      const fOrig = fotoMejorada.fotoOrig
+      if (fOrig.id) {
+        await supabase.from('fotos_producto').update({ es_principal: false }).eq('id', fOrig.id)
+      }
+      // foto_url = mejorada (principal)
+      await supabase.from('productos').update({ foto_url: nuevaUrl }).eq('id', prod.id)
+      notify('✅ Ambas fotos guardadas — mejorada como principal')
+      URL.revokeObjectURL(fotoMejorada.url)
+      setFotoMejorada(null)
+      await loadAll(); await cargarFotos()
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setMejorando(false)
+  }
+
+  const pegarDesdePortapapeles = async () => {
+    try {
+      if (!navigator.clipboard?.read) { notify('Tu navegador no soporta pegar imágenes', 'error'); return }
+      const items = await navigator.clipboard.read()
+      for (const item of items) {
+        const tipo = item.types.find(t => t.startsWith('image/'))
+        if (tipo) {
+          const blob = await item.getType(tipo)
+          await agregarFoto(blob)
+          return
+        }
+      }
+      notify('No hay imagen en el portapapeles', 'error')
+    } catch (e) {
+      if (e.name === 'NotAllowedError') notify('Permiso de portapapeles denegado', 'error')
+      else notify('Error al pegar: ' + e.message, 'error')
+    }
   }
 
   const descartarMejora = () => {
@@ -224,9 +270,10 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
       {fAct && !mejorando && (
         <div style={{ padding: '8px 12px 4px', background: 'rgba(0,0,0,0.5)', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           {fotoMejorada ? (
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={confirmarMejora} style={{ flex: 1, padding: '10px 4px', borderRadius: 8, border: 'none', background: G.ok, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✅ Usar mejorada</button>
-              <button onClick={descartarMejora} style={{ flex: 1, padding: '10px 4px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>↩️ Mantener original</button>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button onClick={confirmarMejora} style={{ flex: 1, padding: '10px 4px', borderRadius: 8, border: 'none', background: G.ok, color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✅ Usar mejorada</button>
+              <button onClick={mantenerAmbas} style={{ flex: 1, padding: '10px 4px', borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>🖼️ Guardar ambas</button>
+              <button onClick={descartarMejora} style={{ flex: '0 0 100%', padding: '8px 4px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#aaa', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>↩️ Mantener solo original</button>
             </div>
           ) : (
             <div style={{ display: 'flex', gap: 6 }}>
@@ -246,12 +293,15 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
       {/* Agregar fotos */}
       <div style={{ padding: '8px 12px 14px', background: 'rgba(0,0,0,0.5)', flexShrink: 0 }}>
         <p style={{ color: '#666', fontSize: 9, margin: '0 0 6px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 1 }}>Agregar foto</p>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setCam(true)} disabled={agregando} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px dashed rgba(197,165,90,0.5)', background: 'rgba(197,165,90,0.1)', color: G.gold, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-            {agregando ? '⏳ Subiendo...' : '📷 Cámara'}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setCam(true)} disabled={agregando} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px dashed rgba(197,165,90,0.5)', background: 'rgba(197,165,90,0.1)', color: G.gold, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+            {agregando ? '⏳' : '📷 Cámara'}
           </button>
-          <button onClick={() => fileRef.current?.click()} disabled={agregando} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: '#aaa', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          <button onClick={() => fileRef.current?.click()} disabled={agregando} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: '#aaa', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
             📁 Galería
+          </button>
+          <button onClick={pegarDesdePortapapeles} disabled={agregando} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: '#aaa', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+            📋 Pegar
           </button>
         </div>
       </div>

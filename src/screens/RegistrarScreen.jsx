@@ -190,7 +190,7 @@ export default function RegistrarScreen(P) {
       let blob
       if (foto.file) { blob = foto.file }
       else { const resp = await fetch(foto.url); blob = await resp.blob() }
-      const mejorada = await mejorarFotoConIA(blob, emp.api_openai_key)
+      const mejorada = await mejorarFotoConIA(blob, eid)
       const nuevaUrl = URL.createObjectURL(mejorada)
       // Guardar temporal — no reemplaza hasta que usuario confirme
       setFotoMejorada({ idx: i, url: nuevaUrl, file: new File([mejorada], 'mejorada.png', { type: 'image/png' }) })
@@ -198,11 +198,45 @@ export default function RegistrarScreen(P) {
     setMejorandoIdx(null)
   }
 
+  const pegarDesdePortapapeles = async () => {
+    try {
+      if (!navigator.clipboard?.read) { notify('Tu navegador no soporta pegar imágenes', 'error'); return }
+      const items = await navigator.clipboard.read()
+      for (const item of items) {
+        const tipo = item.types.find(t => t.startsWith('image/'))
+        if (tipo) {
+          const blob = await item.getType(tipo)
+          await agregarFotoDesdeBlob(blob, 'pegada.png')
+          return
+        }
+      }
+      notify('No hay imagen en el portapapeles', 'error')
+    } catch (e) {
+      if (e.name === 'NotAllowedError') notify('Permiso de portapapeles denegado', 'error')
+      else notify('Error al pegar: ' + e.message, 'error')
+    }
+  }
+
   const usarFotoMejorada = () => {
     if (!fotoMejorada) return
     setFotos(fs => fs.map((f, i) => i === fotoMejorada.idx ? { ...f, url: fotoMejorada.url, file: fotoMejorada.file, esNueva: true } : f))
     setFotoMejorada(null)
     notify('✅ Foto mejorada aplicada')
+  }
+
+  const mantenerAmbas = () => {
+    if (!fotoMejorada) return
+    // Mejorada = principal, original = adicional
+    setFotos(fs => {
+      const nf = [...fs]
+      // La original al índice actual → no principal
+      if (nf[fotoMejorada.idx]) nf[fotoMejorada.idx] = { ...nf[fotoMejorada.idx], es_principal: false }
+      // Insertar mejorada al inicio como principal
+      nf.unshift({ id: null, url: fotoMejorada.url, es_principal: true, esNueva: true, file: fotoMejorada.file })
+      return nf
+    })
+    setFotoMejorada(null)
+    notify('🖼️ Ambas fotos guardadas — mejorada como principal')
   }
 
   const descartarFotoMejorada = () => {
@@ -358,16 +392,20 @@ export default function RegistrarScreen(P) {
         {/* Acciones */}
         <div style={{padding:'12px 16px 20px',background:'rgba(0,0,0,0.5)',display:'flex',gap:8,flexWrap:'wrap'}}>
           {hayMejorada ? (
-            <>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',width:'100%'}}>
               <button onClick={()=>{usarFotoMejorada();setFotoViewer(null)}}
-                style={{flex:1,padding:'12px 0',borderRadius:10,border:'none',background:G.ok,color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                style={{flex:1,padding:'11px 4px',borderRadius:10,border:'none',background:G.ok,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>
                 ✅ Usar mejorada
               </button>
-              <button onClick={descartarFotoMejorada}
-                style={{flex:1,padding:'12px 0',borderRadius:10,border:'1px solid rgba(255,255,255,0.3)',background:'transparent',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
-                ↩️ Mantener original
+              <button onClick={()=>{mantenerAmbas();setFotoViewer(null)}}
+                style={{flex:1,padding:'11px 4px',borderRadius:10,border:'none',background:G.gold,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>
+                🖼️ Guardar ambas
               </button>
-            </>
+              <button onClick={descartarFotoMejorada}
+                style={{flex:'0 0 100%',padding:'9px 4px',borderRadius:10,border:'1px solid rgba(255,255,255,0.3)',background:'transparent',color:'#aaa',fontSize:11,fontWeight:700,cursor:'pointer'}}>
+                ↩️ Mantener solo original
+              </button>
+            </div>
           ) : (
             <>
               {emp?.api_openai_key && (
@@ -449,14 +487,18 @@ export default function RegistrarScreen(P) {
           )}
 
           {/* Botones agregar */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setCam('foto')} style={{ flex: 1, padding: fotos.length > 0 ? 10 : 18, borderRadius: 8, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
-              <span style={{ fontSize: fotos.length > 0 ? 18 : 22, display: 'block' }}>📷</span>
-              <span style={{ fontSize: 11, color: G.gold, fontWeight: 600 }}>Cámara</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => setCam('foto')} style={{ flex: 1, padding: fotos.length > 0 ? 8 : 16, borderRadius: 8, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
+              <span style={{ fontSize: fotos.length > 0 ? 16 : 22, display: 'block' }}>📷</span>
+              <span style={{ fontSize: 10, color: G.gold, fontWeight: 600 }}>Cámara</span>
             </button>
-            <button onClick={() => fileRef.current?.click()} style={{ flex: 1, padding: fotos.length > 0 ? 10 : 18, borderRadius: 8, border: '2px dashed ' + G.border, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
-              <span style={{ fontSize: fotos.length > 0 ? 18 : 22, display: 'block' }}>📁</span>
-              <span style={{ fontSize: 11, color: G.muted, fontWeight: 600 }}>Galería</span>
+            <button onClick={() => fileRef.current?.click()} style={{ flex: 1, padding: fotos.length > 0 ? 8 : 16, borderRadius: 8, border: '2px dashed ' + G.border, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
+              <span style={{ fontSize: fotos.length > 0 ? 16 : 22, display: 'block' }}>📁</span>
+              <span style={{ fontSize: 10, color: G.muted, fontWeight: 600 }}>Galería</span>
+            </button>
+            <button onClick={pegarDesdePortapapeles} style={{ flex: 1, padding: fotos.length > 0 ? 8 : 16, borderRadius: 8, border: '2px dashed ' + G.border, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
+              <span style={{ fontSize: fotos.length > 0 ? 16 : 22, display: 'block' }}>📋</span>
+              <span style={{ fontSize: 10, color: G.muted, fontWeight: 600 }}>Pegar</span>
             </button>
           </div>
           <input key={fileKey} ref={fileRef} type="file" accept="image/*" multiple onChange={onFileSelect} style={{ display: 'none' }} />
