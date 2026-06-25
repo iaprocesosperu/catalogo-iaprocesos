@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { G, iS } from '../constants'
 import { exportCSV } from '../helpers'
@@ -28,28 +28,193 @@ export function SubMenu(P) {
   )
 }
 
+/* ═══ DETALLE ORIGEN ═══ */
+function OrigenDetalle({ origen, eid, onClose }) {
+  const [prods, setProds] = useState([])
+  const [cargando, setCargando] = useState(true)
+
+  useEffect(() => {
+    const cargar = async () => {
+      const { data } = await supabase.from('productos')
+        .select('*,categorias(nombre)')
+        .eq('empresa_id', eid)
+        .eq('origen_id', origen.id)
+        .eq('activo', true)
+        .order('codigo')
+      setProds(data || [])
+      setCargando(false)
+    }
+    cargar()
+  }, [])
+
+  const totalInv = prods.reduce((s, p) => s + (p.precio_costo || 0) * p.cantidad, 0)
+  const totalVenta = prods.reduce((s, p) => s + (p.precio_venta || 0) * p.cantidad, 0)
+  const ganancia = totalVenta - totalInv
+  const pctGan = totalInv > 0 ? ((ganancia / totalInv) * 100).toFixed(0) : 0
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: G.bg, zIndex: 8000, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+      {/* Header */}
+      <div style={{ background: G.gold, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>←</button>
+        <div style={{ flex: 1 }}>
+          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 10, margin: 0 }}>Detalle de origen</p>
+          <h2 style={{ color: '#fff', fontSize: 15, fontWeight: 700, margin: 0 }}>{origen.nombre}</h2>
+        </div>
+        <span style={{ fontSize: 9, padding: '3px 8px', borderRadius: 6, fontWeight: 700,
+          background: origen.estado === 'cerrado' ? '#FEE2E2' : origen.estado === 'observado' ? '#FEF3C7' : '#D1FAE5',
+          color: origen.estado === 'cerrado' ? G.err : origen.estado === 'observado' ? '#92400E' : '#065F46' }}>
+          {origen.estado === 'cerrado' ? '🔴 Cerrado' : origen.estado === 'observado' ? '⚠️ Observado' : '🟢 Activo'}
+        </span>
+      </div>
+
+      <div style={{ padding: 16 }}>
+        {/* Stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+          <div style={{ background: G.goldLt, borderRadius: 10, padding: 12, border: '1px solid ' + G.border }}>
+            <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Items totales</p>
+            <p style={{ fontSize: 20, fontWeight: 800, color: G.gold, margin: '2px 0' }}>{prods.reduce((s,p) => s + p.cantidad, 0)}<span style={{ fontSize: 10, color: G.muted }}>/{origen.cantidad || '∞'}</span></p>
+            <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{prods.length} productos</p>
+          </div>
+          <div style={{ background: G.goldLt, borderRadius: 10, padding: 12, border: '1px solid ' + G.border }}>
+            <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Fecha</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: G.text, margin: '2px 0' }}>{origen.fecha || '—'}</p>
+            <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{origen.observaciones || ''}</p>
+          </div>
+          <div style={{ background: '#1A1A1A', borderRadius: 10, padding: 12 }}>
+            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', margin: 0 }}>Inversión</p>
+            <p style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: '2px 0' }}>S/{totalInv.toFixed(0)}</p>
+            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', margin: 0 }}>stock actual</p>
+          </div>
+          <div style={{ background: ganancia >= 0 ? G.ok : G.err, borderRadius: 10, padding: 12 }}>
+            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.8)', margin: 0 }}>Ganancia esperada</p>
+            <p style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: '2px 0' }}>{ganancia >= 0 ? '+' : ''}S/{ganancia.toFixed(0)}</p>
+            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.8)', margin: 0 }}>{pctGan}% margen • Venta S/{totalVenta.toFixed(0)}</p>
+          </div>
+        </div>
+
+        {/* Lista productos */}
+        <p style={{ fontSize: 12, fontWeight: 700, color: G.text, margin: '0 0 8px' }}>Productos de este origen</p>
+        {cargando ? (
+          <div style={{ textAlign: 'center', padding: 30, color: G.muted }}>⏳ Cargando...</div>
+        ) : prods.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 30, color: G.muted }}>Sin productos registrados</div>
+        ) : prods.map(p => {
+          const gan = p.precio_costo > 0 ? p.precio_venta - p.precio_costo : null
+          const ganTotal = gan !== null ? gan * p.cantidad : null
+          const pct = p.precio_costo > 0 ? ((gan / p.precio_costo) * 100).toFixed(0) : null
+          return (
+            <div key={p.id} style={{ background: '#fff', borderRadius: 10, padding: 10, marginBottom: 6, display: 'flex', gap: 10, border: '1px solid ' + G.border }}>
+              {p.foto_url
+                ? <img src={p.foto_url} alt="" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                : <div style={{ width: 52, height: 52, background: G.goldLt, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ fontSize: 18, opacity: 0.3 }}>📦</span></div>
+              }
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 9, background: G.goldSf, color: G.goldDk, padding: '1px 5px', borderRadius: 4, fontWeight: 600 }}>{p.codigo}</span>
+                    <p style={{ fontSize: 11, fontWeight: 600, margin: '2px 0 0', lineHeight: 1.2 }}>{p.nombre}</p>
+                    <p style={{ fontSize: 9, color: G.muted, margin: '1px 0 0' }}>Stock: {p.cantidad} • {p.categorias?.nombre || ''}</p>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 6 }}>
+                    <p style={{ fontSize: 12, fontWeight: 800, color: G.gold, margin: 0 }}>S/{p.precio_venta}</p>
+                    {p.precio_costo > 0 && <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>C: S/{p.precio_costo}</p>}
+                  </div>
+                </div>
+                {gan !== null && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center' }}>
+                    <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                      background: gan > 0 ? '#D1FAE5' : '#FEE2E2',
+                      color: gan > 0 ? '#065F46' : G.err }}>
+                      {gan > 0 ? '▲' : '▼'} S/{gan.toFixed(1)} x unid ({pct}%)
+                    </span>
+                    {ganTotal !== null && p.cantidad > 0 && (
+                      <span style={{ fontSize: 9, color: G.muted }}>Total: S/{ganTotal.toFixed(0)}</span>
+                    )}
+                  </div>
+                )}
+                {gan === null && (
+                  <span style={{ fontSize: 9, color: G.muted }}>⚪ Sin precio costo</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 /* ═══ ORÍGENES ═══ */
 export function OrigenesScr(P) {
   const { eid, lid, tit, oris, notify, loadAll, setScr } = P
   const [showAdd, setShowAdd] = useState(false)
   const [f, setF] = useState({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '' })
   const [editId, setEditId] = useState(null)
+  const [detalleOrigen, setDetalleOrigen] = useState(null)
+  const [usados, setUsados] = useState({}) // { origen_id: count }
+  const formRef = useRef(null)
   const s = (k, v) => setF(p => ({ ...p, [k]: v }))
   const invCalc = parseFloat(f.cantidad || 0) * parseFloat(f.precio_costo_defecto || 0)
 
+  // Cargar conteo de productos por origen
+  useEffect(() => {
+    const cargarUsados = async () => {
+      if (!oris.length) return
+      const { data } = await supabase.from('productos')
+        .select('origen_id')
+        .eq('empresa_id', eid)
+        .eq('activo', true)
+        .in('origen_id', oris.map(o => o.id))
+      if (data) {
+        const conteo = {}
+        data.forEach(p => { conteo[p.origen_id] = (conteo[p.origen_id] || 0) + 1 })
+        setUsados(conteo)
+      }
+    }
+    cargarUsados()
+  }, [oris])
+
   const guardar = async () => {
     if (!f.nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
-    const data = { empresa_id: eid, linea_id: lid, nombre: f.nombre.trim(), cantidad: parseInt(f.cantidad) || 0, precio_costo_defecto: parseFloat(f.precio_costo_defecto) || null, precio_venta_defecto: parseFloat(f.precio_venta_defecto) || null, fecha: f.fecha || null, observaciones: f.observaciones || null, estado: editId ? undefined : 'activo' }
-    if (data.estado === undefined) delete data.estado
+    const data = {
+      empresa_id: eid, linea_id: lid, nombre: f.nombre.trim(),
+      cantidad: parseInt(f.cantidad) || 0,
+      precio_costo_defecto: parseFloat(f.precio_costo_defecto) || null,
+      precio_venta_defecto: parseFloat(f.precio_venta_defecto) || null,
+      fecha: f.fecha || null, observaciones: f.observaciones || null
+    }
     if (editId) { await supabase.from('origenes').update(data).eq('id', editId); notify('Actualizado') }
-    else { await supabase.from('origenes').insert(data); notify('Agregado') }
-    setShowAdd(false); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '' }); await loadAll()
+    else { await supabase.from('origenes').insert({ ...data, estado: 'activo' }); notify('Agregado') }
+    setShowAdd(false); setEditId(null)
+    setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '' })
+    await loadAll()
   }
-  const editar = o => { setEditId(o.id); setF({ nombre: o.nombre || '', cantidad: String(o.cantidad || ''), precio_costo_defecto: String(o.precio_costo_defecto || ''), precio_venta_defecto: String(o.precio_venta_defecto || ''), fecha: o.fecha || '', observaciones: o.observaciones || '' }); setShowAdd(true) }
-  const eliminar = async id => { if (!confirm('¿Eliminar?')) return; await supabase.from('origenes').update({ activo: false }).eq('id', id); notify('Eliminado'); await loadAll() }
+
+  const editar = o => {
+    setEditId(o.id)
+    setF({
+      nombre: o.nombre || '', cantidad: String(o.cantidad || ''),
+      precio_costo_defecto: String(o.precio_costo_defecto || ''),
+      precio_venta_defecto: String(o.precio_venta_defecto || ''),
+      fecha: o.fecha || '', observaciones: o.observaciones || ''
+    })
+    setShowAdd(true)
+    // Scroll al formulario
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
+
+  const eliminar = async id => {
+    if (!confirm('¿Eliminar?')) return
+    await supabase.from('origenes').update({ activo: false }).eq('id', id)
+    notify('Eliminado'); await loadAll()
+  }
+
   const totalInv = oris.reduce((s, o) => s + (o.cantidad || 0) * (o.precio_costo_defecto || 0), 0)
   const totalItems = oris.reduce((s, o) => s + (o.cantidad || 0), 0)
   const totalVenta = oris.reduce((s, o) => s + (o.cantidad || 0) * (o.precio_venta_defecto || 0), 0)
+
+  if (detalleOrigen) return <OrigenDetalle origen={detalleOrigen} eid={eid} onClose={() => setDetalleOrigen(null)} />
 
   return (
     <div>
@@ -67,59 +232,105 @@ export function OrigenesScr(P) {
             <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, margin: 0 }}>+S/{(totalVenta - totalInv).toFixed(0)} ganancia</p>
           </div>
         </div>
-        <button onClick={() => { setShowAdd(!showAdd); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '' }) }}
+
+        <button onClick={() => {
+          setShowAdd(!showAdd); setEditId(null)
+          setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '' })
+          if (!showAdd) setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+        }}
           style={{ width: '100%', padding: 12, borderRadius: 8, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', color: G.gold, fontWeight: 700, fontSize: 13, marginBottom: 12 }}>
           ➕ Nuevo origen
         </button>
+
+        {/* Formulario */}
         {showAdd && (
-          <Crd title={editId ? 'Editar origen' : 'Nuevo origen'}>
-            <label style={{ fontSize: 11, color: G.muted }}>Nombre *</label>
-            <input value={f.nombre} onChange={e => s('nombre', e.target.value)} placeholder="Fardo 1 Mujeres" style={iS(G)} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Cantidad items</label><input value={f.cantidad} onChange={e => s('cantidad', e.target.value)} type="number" placeholder="100" style={iS(G)} /></div>
-              <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Precio Costo (S/)</label><input value={f.precio_costo_defecto} onChange={e => s('precio_costo_defecto', e.target.value)} type="number" placeholder="5" style={iS(G)} /></div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Precio Venta (S/)</label><input value={f.precio_venta_defecto} onChange={e => s('precio_venta_defecto', e.target.value)} type="number" placeholder="15" style={iS(G)} /></div>
-              <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Fecha</label><input value={f.fecha} onChange={e => s('fecha', e.target.value)} type="date" style={iS(G)} /></div>
-            </div>
-            {invCalc > 0 && (
-              <div style={{ background: G.goldLt, borderRadius: 8, padding: 10, marginBottom: 8, textAlign: 'center' }}>
-                <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>Inversión calculada</p>
-                <p style={{ fontSize: 18, fontWeight: 800, color: G.gold, margin: 0 }}>S/ {invCalc.toFixed(2)}</p>
-                <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{f.cantidad} items × S/{f.precio_costo_defecto}</p>
-              </div>
-            )}
-            <label style={{ fontSize: 11, color: G.muted }}>Observaciones</label>
-            <textarea value={f.observaciones} onChange={e => s('observaciones', e.target.value)} rows={2} style={{ ...iS(G), resize: 'vertical' }} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => { setShowAdd(false); setEditId(null) }} style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={guardar} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{editId ? 'Actualizar' : 'Guardar'}</button>
-            </div>
-          </Crd>
-        )}
-        {oris.map(o => (
-          <div key={o.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{o.nombre}</p>
-                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
-                    background: o.estado === 'cerrado' ? '#FEE2E2' : o.estado === 'observado' ? '#FEF3C7' : '#D1FAE5',
-                    color: o.estado === 'cerrado' ? G.err : o.estado === 'observado' ? '#92400E' : '#065F46' }}>
-                    {o.estado === 'cerrado' ? '🔴 Cerrado' : o.estado === 'observado' ? '⚠️ Observado' : '🟢 Activo'}
-                  </span>
+          <div ref={formRef}>
+            <Crd title={editId ? 'Editar origen' : 'Nuevo origen'}>
+              <label style={{ fontSize: 11, color: G.muted }}>Nombre *</label>
+              <input value={f.nombre} onChange={e => s('nombre', e.target.value)} placeholder="Fardo 1 Mujeres" style={iS(G)} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, color: G.muted }}>Cantidad items <span style={{ color: G.muted, fontWeight: 400 }}>(opcional)</span></label>
+                  <input value={f.cantidad} onChange={e => s('cantidad', e.target.value)} type="number" placeholder="100" style={iS(G)} />
                 </div>
-                <p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{o.cantidad ? o.cantidad + ' items' : ''} {o.precio_costo_defecto ? '• C: S/' + o.precio_costo_defecto : ''} {o.precio_venta_defecto ? 'V: S/' + o.precio_venta_defecto : ''}{o.cantidad && o.precio_costo_defecto ? ' • Inv: S/' + (o.cantidad * o.precio_costo_defecto).toFixed(0) : ''} {o.fecha ? ' • ' + o.fecha : ''}</p>
-                {o.observaciones && <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{o.observaciones}</p>}
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, color: G.muted }}>Precio Costo (S/)</label>
+                  <input value={f.precio_costo_defecto} onChange={e => s('precio_costo_defecto', e.target.value)} type="number" placeholder="5" style={iS(G)} />
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button onClick={() => editar(o)} style={{ background: G.goldSf, color: G.goldDk, border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 10 }}>Editar</button>
-                <button onClick={() => eliminar(o.id)} style={{ background: '#FEE2E2', color: G.err, border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 10 }}>🗑</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, color: G.muted }}>Precio Venta (S/)</label>
+                  <input value={f.precio_venta_defecto} onChange={e => s('precio_venta_defecto', e.target.value)} type="number" placeholder="15" style={iS(G)} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, color: G.muted }}>Fecha</label>
+                  <input value={f.fecha} onChange={e => s('fecha', e.target.value)} type="date" style={iS(G)} />
+                </div>
+              </div>
+              {invCalc > 0 && (
+                <div style={{ background: G.goldLt, borderRadius: 8, padding: 10, marginBottom: 8, textAlign: 'center' }}>
+                  <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>Inversión calculada</p>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: G.gold, margin: 0 }}>S/ {invCalc.toFixed(2)}</p>
+                  <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{f.cantidad} items × S/{f.precio_costo_defecto}</p>
+                </div>
+              )}
+              <label style={{ fontSize: 11, color: G.muted }}>Observaciones</label>
+              <textarea value={f.observaciones} onChange={e => s('observaciones', e.target.value)} rows={2} style={{ ...iS(G), resize: 'vertical' }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => { setShowAdd(false); setEditId(null) }} style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={guardar} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{editId ? 'Actualizar' : 'Guardar'}</button>
+              </div>
+            </Crd>
+          </div>
+        )}
+
+        {/* Lista orígenes */}
+        {oris.map(o => {
+          const usadosCount = usados[o.id] || 0
+          const pct = o.cantidad > 0 ? usadosCount / o.cantidad : null
+          return (
+            <div key={o.id} style={{ background: '#fff', borderRadius: 10, marginBottom: 6, border: '1px solid ' + G.border, overflow: 'hidden' }}>
+              {/* Barra de progreso si tiene cantidad */}
+              {o.cantidad > 0 && (
+                <div style={{ height: 3, background: '#eee' }}>
+                  <div style={{ height: '100%', width: Math.min(pct * 100, 100) + '%', background: pct >= 1 ? G.err : pct >= 0.8 ? G.warn : G.ok, transition: 'width 0.3s' }} />
+                </div>
+              )}
+              <div style={{ padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                  {/* Tappable area */}
+                  <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setDetalleOrigen(o)}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{o.nombre}</p>
+                      <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                        background: o.estado === 'cerrado' ? '#FEE2E2' : o.estado === 'observado' ? '#FEF3C7' : '#D1FAE5',
+                        color: o.estado === 'cerrado' ? G.err : o.estado === 'observado' ? '#92400E' : '#065F46' }}>
+                        {o.estado === 'cerrado' ? '🔴 Cerrado' : o.estado === 'observado' ? '⚠️ Observado' : '🟢 Activo'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 10, color: G.muted, margin: '3px 0 1px' }}>
+                      {o.cantidad > 0
+                        ? <span style={{ fontWeight: 600, color: pct >= 1 ? G.err : pct >= 0.8 ? G.warn : G.text }}>{usadosCount}/{o.cantidad} usados</span>
+                        : <span>{usadosCount} registrados</span>
+                      }
+                      {o.precio_costo_defecto ? ' • C: S/' + o.precio_costo_defecto : ''}
+                      {o.precio_venta_defecto ? ' V: S/' + o.precio_venta_defecto : ''}
+                      {o.cantidad && o.precio_costo_defecto ? ' • Inv: S/' + (o.cantidad * o.precio_costo_defecto).toFixed(0) : ''}
+                      {o.fecha ? ' • ' + o.fecha : ''}
+                    </p>
+                    {o.observaciones && <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{o.observaciones}</p>}
+                    <p style={{ fontSize: 9, color: G.gold, margin: '2px 0 0' }}>👆 Toca para ver detalle</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
+                    <button onClick={() => editar(o)} style={{ background: G.goldSf, color: G.goldDk, border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 10 }}>Editar</button>
+                    <button onClick={() => eliminar(o.id)} style={{ background: '#FEE2E2', color: G.err, border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 10 }}>🗑</button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

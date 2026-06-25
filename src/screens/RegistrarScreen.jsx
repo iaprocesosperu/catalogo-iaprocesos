@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase, comprimirImagen, subirFoto } from '../supabase'
 import { G, iS, sS } from '../constants'
-import { blobToBase64, downloadPhoto, detectColor } from '../helpers'
+import { blobToBase64, downloadPhoto, detectColor, mejorarFotoConIA } from '../helpers'
 import { CamModal, Hdr, Crd, VoiceBtn } from '../components/index'
 
 export default function RegistrarScreen(P) {
@@ -22,6 +22,7 @@ export default function RegistrarScreen(P) {
   const [saving, setSaving] = useState(false)
   const [ocrLoad, setOcrLoad] = useState(false)
   const [detecting, setDetecting] = useState(false)
+  const [mejorandoIdx, setMejorandoIdx] = useState(null)
   const [cam, setCam] = useState(null) // 'label' | 'foto'
   const [colSrch, setColSrch] = useState('')
   const [fileKey, setFileKey] = useState(0)
@@ -82,8 +83,8 @@ export default function RegistrarScreen(P) {
     if (o) {
       if (o.precio_costo_defecto && !f.precio_costo) s('precio_costo', String(o.precio_costo_defecto))
       if (o.precio_venta_defecto && !f.precio_venta) s('precio_venta', String(o.precio_venta_defecto))
-      // Verificar capacidad
-      if (o.cantidad) {
+      // Verificar capacidad solo si cantidad > 0
+      if (o.cantidad > 0) {
         const { count } = await supabase.from('productos').select('id', { count: 'exact', head: true })
           .eq('empresa_id', eid).eq('origen_id', o.id).eq('activo', true)
         const usado = count || 0
@@ -174,6 +175,28 @@ export default function RegistrarScreen(P) {
     const { error } = await supabase.from('colores').insert({ empresa_id: eid, nombre: newColName.trim() })
     if (error) { notify('Error: ' + error.message, 'error'); return }
     await loadAll(); s('color', newColName.trim()); setColSrch(''); setShowNewCol(false); setNewColName(''); notify('Color creado')
+  }
+
+  // ── MEJORAR FOTO CON IA (en registro) ──
+  const mejorarFotoEnReg = async (i) => {
+    if (!emp?.api_openai_key) return
+    const foto = fotos[i]
+    if (!foto) return
+    setMejorandoIdx(i)
+    try {
+      let blob
+      if (foto.file) {
+        blob = foto.file
+      } else {
+        const resp = await fetch(foto.url)
+        blob = await resp.blob()
+      }
+      const mejorada = await mejorarFotoConIA(blob, emp.api_openai_key)
+      const nuevaUrl = URL.createObjectURL(mejorada)
+      setFotos(fs => fs.map((f, idx) => idx === i ? { ...f, url: nuevaUrl, file: new File([mejorada], 'mejorada.png', { type: 'image/png' }), esNueva: true } : f))
+      notify('✨ Foto mejorada')
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setMejorandoIdx(null)
   }
 
   // ── GUARDAR ──
@@ -312,6 +335,11 @@ export default function RegistrarScreen(P) {
                   <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', background: 'rgba(0,0,0,0.6)' }}>
                     {!foto.es_principal && (
                       <button onClick={() => marcarPrincipal(i)} style={{ flex: 1, padding: '3px 0', border: 'none', background: 'transparent', color: G.gold, fontSize: 10, cursor: 'pointer' }}>⭐</button>
+                    )}
+                    {emp?.api_openai_key && (
+                      <button onClick={() => mejorarFotoEnReg(i)} disabled={mejorandoIdx === i} style={{ flex: 1, padding: '3px 0', border: 'none', background: 'transparent', color: '#a78bfa', fontSize: 10, cursor: 'pointer' }}>
+                        {mejorandoIdx === i ? '⏳' : '✨'}
+                      </button>
                     )}
                     <button onClick={() => eliminarFoto(i)} style={{ flex: 1, padding: '3px 0', border: 'none', background: 'transparent', color: '#ff6b6b', fontSize: 10, cursor: 'pointer' }}>🗑</button>
                   </div>
