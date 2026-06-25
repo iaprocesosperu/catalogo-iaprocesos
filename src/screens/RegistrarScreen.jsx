@@ -24,6 +24,7 @@ export default function RegistrarScreen(P) {
   const [detecting, setDetecting] = useState(false)
   const [mejorandoIdx, setMejorandoIdx] = useState(null)
   const [fotoViewer, setFotoViewer] = useState(null) // índice de foto en viewer
+  const [fotoMejorada, setFotoMejorada] = useState(null) // {idx, url, blob} — temporal hasta confirmar
   const [cam, setCam] = useState(null) // 'label' | 'foto'
   const [colSrch, setColSrch] = useState('')
   const [fileKey, setFileKey] = useState(0)
@@ -184,20 +185,30 @@ export default function RegistrarScreen(P) {
     const foto = fotos[i]
     if (!foto) return
     setMejorandoIdx(i)
+    setFotoMejorada(null)
     try {
       let blob
-      if (foto.file) {
-        blob = foto.file
-      } else {
-        const resp = await fetch(foto.url)
-        blob = await resp.blob()
-      }
+      if (foto.file) { blob = foto.file }
+      else { const resp = await fetch(foto.url); blob = await resp.blob() }
       const mejorada = await mejorarFotoConIA(blob, emp.api_openai_key)
       const nuevaUrl = URL.createObjectURL(mejorada)
-      setFotos(fs => fs.map((f, idx) => idx === i ? { ...f, url: nuevaUrl, file: new File([mejorada], 'mejorada.png', { type: 'image/png' }), esNueva: true } : f))
-      notify('✨ Foto mejorada')
+      // Guardar temporal — no reemplaza hasta que usuario confirme
+      setFotoMejorada({ idx: i, url: nuevaUrl, file: new File([mejorada], 'mejorada.png', { type: 'image/png' }) })
     } catch (e) { notify('Error: ' + e.message, 'error') }
     setMejorandoIdx(null)
+  }
+
+  const usarFotoMejorada = () => {
+    if (!fotoMejorada) return
+    setFotos(fs => fs.map((f, i) => i === fotoMejorada.idx ? { ...f, url: fotoMejorada.url, file: fotoMejorada.file, esNueva: true } : f))
+    setFotoMejorada(null)
+    notify('✅ Foto mejorada aplicada')
+  }
+
+  const descartarFotoMejorada = () => {
+    if (fotoMejorada) URL.revokeObjectURL(fotoMejorada.url)
+    setFotoMejorada(null)
+    notify('↩️ Se mantuvo la foto original')
   }
 
   // ── GUARDAR ──
@@ -297,6 +308,9 @@ export default function RegistrarScreen(P) {
     if (fotoViewer === null) return null
     const foto = fotos[fotoViewer]
     if (!foto) return null
+    const estaMejorando = mejorandoIdx === fotoViewer
+    const hayMejorada = fotoMejorada?.idx === fotoViewer
+
     return (
       <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.97)',zIndex:9500,display:'flex',flexDirection:'column'}}>
         {/* Header */}
@@ -305,31 +319,73 @@ export default function RegistrarScreen(P) {
             <p style={{color:G.gold,fontSize:11,margin:0,fontWeight:700}}>Foto {fotoViewer+1} de {fotos.length}</p>
             {foto.es_principal && <p style={{color:'#aaa',fontSize:10,margin:0}}>⭐ Principal</p>}
           </div>
-          <button onClick={()=>setFotoViewer(null)} style={{background:'rgba(255,255,255,0.1)',border:'none',color:'#fff',fontSize:20,cursor:'pointer',width:36,height:36,borderRadius:18,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+          <button onClick={()=>{setFotoViewer(null);if(!hayMejorada)setFotoMejorada(null)}} style={{background:'rgba(255,255,255,0.1)',border:'none',color:'#fff',fontSize:20,cursor:'pointer',width:36,height:36,borderRadius:18,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
         </div>
-        {/* Foto */}
-        <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
-          {mejorandoIdx===fotoViewer
-            ? <div style={{color:'#fff',textAlign:'center'}}><p style={{fontSize:40}}>✨</p><p>Mejorando con IA...</p></div>
-            : <img src={foto.url} alt="" style={{maxWidth:'94%',maxHeight:'94%',objectFit:'contain',borderRadius:8}}/>
-          }
-        </div>
-        {/* Acciones */}
-        <div style={{padding:'12px 16px 20px',background:'rgba(0,0,0,0.5)',display:'flex',gap:8}}>
-          {emp?.api_openai_key && (
-            <button onClick={async()=>{await mejorarFotoEnReg(fotoViewer)}} disabled={mejorandoIdx!==null}
-              style={{flex:1,padding:'12px 0',borderRadius:10,border:'none',background:mejorandoIdx!==null?'#444':'#6C47FF',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
-              {mejorandoIdx===fotoViewer?'⏳ Mejorando...':'✨ Mejorar IA'}
-            </button>
+
+        {/* Foto / Progreso / Comparación */}
+        <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexDirection:'column',gap:12,padding:16}}>
+          {estaMejorando ? (
+            <div style={{textAlign:'center',color:'#fff',width:'100%',maxWidth:320}}>
+              <p style={{fontSize:36,margin:'0 0 12px'}}>✨</p>
+              <p style={{fontSize:14,fontWeight:600,margin:'0 0 16px'}}>Mejorando foto con IA...</p>
+              <p style={{fontSize:11,color:'#aaa',margin:'0 0 20px'}}>Puede tardar hasta 1 minuto</p>
+              {/* Barra animada */}
+              <div style={{width:'100%',height:6,background:'rgba(255,255,255,0.15)',borderRadius:3,overflow:'hidden'}}>
+                <div style={{height:'100%',background:'linear-gradient(90deg,#6C47FF,#C5A55A)',borderRadius:3,animation:'progress-bar 2s ease-in-out infinite',width:'60%'}}/>
+              </div>
+              <style>{`@keyframes progress-bar{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}`}</style>
+            </div>
+          ) : hayMejorada ? (
+            // Comparación original vs mejorada
+            <div style={{width:'100%',display:'flex',flexDirection:'column',gap:12,alignItems:'center'}}>
+              <p style={{color:G.gold,fontSize:12,fontWeight:700,margin:0}}>¿Con cuál te quedas?</p>
+              <div style={{display:'flex',gap:8,width:'100%'}}>
+                <div style={{flex:1,textAlign:'center'}}>
+                  <p style={{color:'#aaa',fontSize:10,margin:'0 0 4px'}}>ORIGINAL</p>
+                  <img src={foto.url} alt="" style={{width:'100%',aspectRatio:'1',objectFit:'contain',borderRadius:8,border:'2px solid rgba(255,255,255,0.2)'}}/>
+                </div>
+                <div style={{flex:1,textAlign:'center'}}>
+                  <p style={{color:G.gold,fontSize:10,margin:'0 0 4px',fontWeight:700}}>✨ MEJORADA</p>
+                  <img src={fotoMejorada.url} alt="" style={{width:'100%',aspectRatio:'1',objectFit:'contain',borderRadius:8,border:'2px solid '+G.gold}}/>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <img src={foto.url} alt="" style={{maxWidth:'94%',maxHeight:'94%',objectFit:'contain',borderRadius:8}}/>
           )}
-          <button onClick={()=>{setCam('foto');setFotoViewer(null)}}
-            style={{flex:1,padding:'12px 0',borderRadius:10,border:'1px solid rgba(197,165,90,0.5)',background:'rgba(197,165,90,0.1)',color:G.gold,fontSize:13,fontWeight:700,cursor:'pointer'}}>
-            🔄 Cambiar
-          </button>
-          <button onClick={()=>{eliminarFoto(fotoViewer);setFotoViewer(null)}}
-            style={{flex:1,padding:'12px 0',borderRadius:10,border:'none',background:'#C0392B',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
-            🗑 Eliminar
-          </button>
+        </div>
+
+        {/* Acciones */}
+        <div style={{padding:'12px 16px 20px',background:'rgba(0,0,0,0.5)',display:'flex',gap:8,flexWrap:'wrap'}}>
+          {hayMejorada ? (
+            <>
+              <button onClick={()=>{usarFotoMejorada();setFotoViewer(null)}}
+                style={{flex:1,padding:'12px 0',borderRadius:10,border:'none',background:G.ok,color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                ✅ Usar mejorada
+              </button>
+              <button onClick={descartarFotoMejorada}
+                style={{flex:1,padding:'12px 0',borderRadius:10,border:'1px solid rgba(255,255,255,0.3)',background:'transparent',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                ↩️ Mantener original
+              </button>
+            </>
+          ) : (
+            <>
+              {emp?.api_openai_key && (
+                <button onClick={()=>mejorarFotoEnReg(fotoViewer)} disabled={estaMejorando}
+                  style={{flex:1,padding:'12px 0',borderRadius:10,border:'none',background:estaMejorando?'#444':'#6C47FF',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                  ✨ Mejorar IA
+                </button>
+              )}
+              <button onClick={()=>{setCam('foto');setFotoViewer(null)}}
+                style={{flex:1,padding:'12px 0',borderRadius:10,border:'1px solid rgba(197,165,90,0.5)',background:'rgba(197,165,90,0.1)',color:G.gold,fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                🔄 Cambiar
+              </button>
+              <button onClick={()=>{eliminarFoto(fotoViewer);setFotoViewer(null)}}
+                style={{flex:1,padding:'12px 0',borderRadius:10,border:'none',background:'#C0392B',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                🗑 Eliminar
+              </button>
+            </>
+          )}
         </div>
       </div>
     )

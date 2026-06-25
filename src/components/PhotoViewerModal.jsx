@@ -9,6 +9,7 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
   const [idx, setIdx] = useState(0)
   const [mejorando, setMejorando] = useState(false)
   const [agregando, setAgregando] = useState(false)
+  const [fotoMejorada, setFotoMejorada] = useState(null) // {url, blob} temporal
   const [cargando, setCargando] = useState(true)
   const [cam, setCam] = useState(false)
   const fileRef = useRef(null)
@@ -93,22 +94,43 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
   const mejorar = async (foto) => {
     if (!emp?.api_openai_key) return
     setMejorando(true)
+    setFotoMejorada(null)
     try {
       const resp = await fetch(foto.url)
       if (!resp.ok) throw new Error('No se pudo descargar la foto')
       const blob = await resp.blob()
       const mejorada = await mejorarFotoConIA(blob, emp.api_openai_key)
-      const nuevaUrl = await subirFoto(mejorada, 'mejora_' + prod.codigo + '_' + Date.now())
-      if (foto.id) {
-        await supabase.from('fotos_producto').update({ url: nuevaUrl }).eq('id', foto.id)
-        if (foto.es_principal) await supabase.from('productos').update({ foto_url: nuevaUrl }).eq('id', prod.id)
+      const prevUrl = URL.createObjectURL(mejorada)
+      // Guardar temporal — no sube hasta confirmar
+      setFotoMejorada({ url: prevUrl, blob: mejorada, fotoOrig: foto })
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setMejorando(false)
+  }
+
+  const confirmarMejora = async () => {
+    if (!fotoMejorada) return
+    setMejorando(true)
+    try {
+      const { fotoOrig } = fotoMejorada
+      const nuevaUrl = await subirFoto(fotoMejorada.blob, 'mejora_' + prod.codigo + '_' + Date.now())
+      if (fotoOrig.id) {
+        await supabase.from('fotos_producto').update({ url: nuevaUrl }).eq('id', fotoOrig.id)
+        if (fotoOrig.es_principal) await supabase.from('productos').update({ foto_url: nuevaUrl }).eq('id', prod.id)
       } else {
         await supabase.from('productos').update({ foto_url: nuevaUrl }).eq('id', prod.id)
       }
-      notify('✨ Foto mejorada con IA')
+      notify('✅ Foto mejorada guardada')
+      URL.revokeObjectURL(fotoMejorada.url)
+      setFotoMejorada(null)
       await loadAll(); await cargarFotos()
-    } catch (e) { notify('Error: ' + e.message, 'error') }
+    } catch (e) { notify('Error al guardar: ' + e.message, 'error') }
     setMejorando(false)
+  }
+
+  const descartarMejora = () => {
+    if (fotoMejorada) URL.revokeObjectURL(fotoMejorada.url)
+    setFotoMejorada(null)
+    notify('↩️ Se mantuvo la foto original')
   }
 
   const touchX = useRef(null)
@@ -139,10 +161,34 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
         <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', width: 36, height: 36, borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
       </div>
 
-      {/* Foto */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', minHeight: 0 }}>
+      {/* Foto / Progreso / Comparación */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', minHeight: 0, flexDirection: 'column', gap: 12, padding: fotoMejorada ? 16 : 0 }}>
         {cargando ? (
           <div style={{ color: '#888', textAlign: 'center' }}><p style={{ fontSize: 32 }}>⏳</p><p style={{ fontSize: 12 }}>Cargando fotos...</p></div>
+        ) : mejorando ? (
+          <div style={{ textAlign: 'center', color: '#fff', width: '100%', maxWidth: 320, padding: 16 }}>
+            <p style={{ fontSize: 36, margin: '0 0 12px' }}>✨</p>
+            <p style={{ fontSize: 14, fontWeight: 600, margin: '0 0 8px' }}>Mejorando foto con IA...</p>
+            <p style={{ fontSize: 11, color: '#aaa', margin: '0 0 20px' }}>Puede tardar hasta 1 minuto</p>
+            <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.15)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: 'linear-gradient(90deg,#6C47FF,#C5A55A)', borderRadius: 3, animation: 'pb 2s ease-in-out infinite', width: '60%' }} />
+            </div>
+            <style>{`@keyframes pb{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}`}</style>
+          </div>
+        ) : fotoMejorada ? (
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+            <p style={{ color: G.gold, fontSize: 12, fontWeight: 700, margin: 0 }}>¿Con cuál te quedas?</p>
+            <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+              <div style={{ flex: 1, textAlign: 'center' }}>
+                <p style={{ color: '#aaa', fontSize: 10, margin: '0 0 4px' }}>ORIGINAL</p>
+                <img src={fAct?.url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', borderRadius: 8, border: '2px solid rgba(255,255,255,0.2)' }} />
+              </div>
+              <div style={{ flex: 1, textAlign: 'center' }}>
+                <p style={{ color: G.gold, fontSize: 10, margin: '0 0 4px', fontWeight: 700 }}>✨ MEJORADA</p>
+                <img src={fotoMejorada.url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', borderRadius: 8, border: '2px solid ' + G.gold }} />
+              </div>
+            </div>
+          </div>
         ) : fAct ? (
           <img src={fAct.url} alt="" style={{ maxWidth: '94%', maxHeight: '94%', objectFit: 'contain', borderRadius: 8 }} />
         ) : (
@@ -175,20 +221,25 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
       )}
 
       {/* Acciones foto actual */}
-      {fAct && (
+      {fAct && !mejorando && (
         <div style={{ padding: '8px 12px 4px', background: 'rgba(0,0,0,0.5)', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {!fAct.es_principal && fAct.id && (
-              <button onClick={() => marcarPrincipal(fAct)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>⭐ Principal</button>
-            )}
-            {emp?.api_openai_key && (
-              <button onClick={() => mejorar(fAct)} disabled={mejorando} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: mejorando ? '#555' : '#6C47FF', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-                {mejorando ? '⏳' : '✨ Mejorar IA'}
-              </button>
-            )}
-            <button onClick={() => downloadPhoto(fAct.url, prod.codigo + (fotos.length > 1 ? '_' + (idx + 1) : ''))} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#333', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>📥</button>
-            <button onClick={() => eliminar(fAct)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#C0392B', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>🗑</button>
-          </div>
+          {fotoMejorada ? (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={confirmarMejora} style={{ flex: 1, padding: '10px 4px', borderRadius: 8, border: 'none', background: G.ok, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✅ Usar mejorada</button>
+              <button onClick={descartarMejora} style={{ flex: 1, padding: '10px 4px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>↩️ Mantener original</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 6 }}>
+              {!fAct.es_principal && fAct.id && (
+                <button onClick={() => marcarPrincipal(fAct)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>⭐ Principal</button>
+              )}
+              {emp?.api_openai_key && (
+                <button onClick={() => mejorar(fAct)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#6C47FF', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✨ Mejorar IA</button>
+              )}
+              <button onClick={() => downloadPhoto(fAct.url, prod.codigo + (fotos.length > 1 ? '_' + (idx + 1) : ''))} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#333', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>📥</button>
+              <button onClick={() => eliminar(fAct)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#C0392B', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>🗑</button>
+            </div>
+          )}
         </div>
       )}
 
