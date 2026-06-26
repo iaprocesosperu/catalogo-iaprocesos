@@ -24,9 +24,9 @@ PROMPT = """Edita esta fotografía de prenda de ropa para catálogo profesional.
 
 FONDO: Reemplaza el fondo con un color neutro liso y cálido — preferir crema o beige claro para prendas oscuras, blanco puro para prendas de colores. El fondo debe ser completamente uniforme sin gradientes ni sombras.
 
-TEXTURA Y TELA — MUY IMPORTANTE: Conserva fielmente TODA la textura original de la prenda. Si la prenda es peluda, afelpada, de punto, con brillos, lentejuelas o destellos — estos detalles son PARTE DEL DISEÑO y deben verse claramente en la imagen final. NO alisar, NO suavizar, NO simplificar la superficie de la tela. Solo elimina arrugas de pliegue o doblez, nunca la textura propia del tejido.
+TEXTURA Y TELA — CRÍTICO: Conserva fielmente y con máximo detalle TODA la textura original de la prenda. Si la prenda tiene pelos, pelusa, fieltro, tejido afelpado o material esponjoso — estos pelos deben verse individualmente igual que en la foto original. PROHIBIDO alisar, suavizar, comprimir o simplificar la superficie de la tela. La textura peluda debe verse igual o más nítida que en la foto original. Solo elimina arrugas de pliegue o doblez, NUNCA la textura propia del tejido.
 
-BRILLO Y DESTELLOS: Si la prenda tiene hilos brillantes, lentejuelas o destellos metálicos, resáltalos con buena iluminación. Son características clave del producto.
+BRILLO Y DESTELLOS — CRÍTICO: Si la prenda tiene hilos brillantes, lentejuelas, destellos o partículas metálicas, estos deben verse claramente en la imagen final con el mismo nivel de brillo que en el original. Son características clave del producto y no deben reducirse ni eliminarse.
 
 ILUMINACIÓN: Luz suave, difusa y uniforme que resalte la textura real de la prenda. Sin sombras duras. La iluminación debe hacer que los materiales especiales (pelusa, brillo, bordados) se vean atractivos.
 
@@ -36,7 +36,8 @@ COMPOSICIÓN: Prenda completamente visible de arriba a abajo, centrada, con espa
 
 COLOR: Conserva exactamente el color real de la prenda sin alterar tonos.
 
-LIMPIEZA — MUY IMPORTANTE: Elimina ÚNICAMENTE las etiquetas externas de precio (etiqueta pequeña amarilla colgante) y etiquetas de código de barras (etiqueta pequeña celeste o blanca con números). NO elimines ni modifiques las etiquetas cosidas dentro de la prenda como etiqueta de marca, etiqueta de talla, etiqueta de composición de tela — estas son parte del producto y deben conservarse.
+LIMPIEZA — MUY IMPORTANTE: Elimina ÚNICAMENTE las etiquetas externas de precio (etiqueta pequeña amarilla colgante) y etiquetas de código de barras (etiqueta pequeña celeste o blanca con números). 
+ETIQUETAS DE MARCA — CRÍTICO: NO toques, NO muevas, NO cambies el color, NO alteres el texto ni el diseño de ninguna etiqueta cosida en la prenda (etiqueta de marca, etiqueta de talla, etiqueta de composición). Estas etiquetas deben aparecer exactamente igual que en la foto original — mismo color, mismo texto, mismo tamaño, misma posición. Son parte de la identidad del producto.
 
 RESULTADO: Foto de catálogo profesional donde la textura y materiales de la prenda sean el protagonista."""
 
