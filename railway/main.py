@@ -20,16 +20,25 @@ LIMITE_DIARIO = int(os.environ.get("LIMITE_DIARIO", "50"))
 # Control simple en memoria (se reinicia con el servidor)
 uso_diario: dict = defaultdict(lambda: {"fecha": str(date.today()), "count": 0})
 
-PROMPT = """Edita esta fotografía de prenda de ropa siguiendo estas reglas profesionales de catálogo:
-FONDO: Elige automáticamente un fondo neutro liso que resalte la prenda según su color (blanco, gris claro, crema o beige según corresponda). Elimina completamente el fondo original.
-ILUMINACIÓN: Mejora la iluminación, contraste y nitidez. Elimina sombras innecesarias. Iluminación uniforme y profesional.
-TELA: Elimina arrugas visibles. Conserva la textura natural, caída, costuras, logos y estampados originales de la prenda.
-LIMPIEZA: Elimina etiquetas de precio, etiquetas de código de barras, y cualquier elemento distractor del fondo.
-COLGADOR: Usa siempre un colgador elegante negro de estilo premium. El colgador debe estar sujeto a un perchero o gancho elegante visible en la parte superior. Nunca debe parecer flotando en el aire.
-COMPOSICIÓN: Prenda centrada, alineada verticalmente, completamente visible, con espacio uniforme en todos los bordes.
-COLOR: Conserva el color real de la prenda sin sobresaturar ni alterar los tonos originales.
-FIDELIDAD: No modifiques el diseño, estampado ni estructura original de la prenda.
-RESULTADO: Imagen de catálogo profesional, elegante y uniforme lista para publicación."""
+PROMPT = """Edita esta fotografía de prenda de ropa para catálogo profesional. Sigue estas reglas con precisión:
+
+FONDO: Reemplaza el fondo con un color neutro liso y cálido — preferir crema o beige claro para prendas oscuras, blanco puro para prendas de colores. El fondo debe ser completamente uniforme sin gradientes ni sombras.
+
+TEXTURA Y TELA — MUY IMPORTANTE: Conserva fielmente TODA la textura original de la prenda. Si la prenda es peluda, afelpada, de punto, con brillos, lentejuelas o destellos — estos detalles son PARTE DEL DISEÑO y deben verse claramente en la imagen final. NO alisar, NO suavizar, NO simplificar la superficie de la tela. Solo elimina arrugas de pliegue o doblez, nunca la textura propia del tejido.
+
+BRILLO Y DESTELLOS: Si la prenda tiene hilos brillantes, lentejuelas o destellos metálicos, resáltalos con buena iluminación. Son características clave del producto.
+
+ILUMINACIÓN: Luz suave, difusa y uniforme que resalte la textura real de la prenda. Sin sombras duras. La iluminación debe hacer que los materiales especiales (pelusa, brillo, bordados) se vean atractivos.
+
+COLGADOR: Usa un colgador negro elegante tipo premium. Debe estar colgado en una barra o soporte negro visible en la parte superior de la imagen. La prenda nunca debe parecer flotando — siempre debe verse el soporte del colgador.
+
+COMPOSICIÓN: Prenda completamente visible de arriba a abajo, centrada, con espacio uniforme en todos los bordes. Incluir la parte superior del colgador y su soporte.
+
+COLOR: Conserva exactamente el color real de la prenda sin alterar tonos.
+
+LIMPIEZA: Elimina etiquetas de precio, códigos de barras y elementos del fondo original. No elimines nada de la prenda misma.
+
+RESULTADO: Foto de catálogo profesional donde la textura y materiales de la prenda sean el protagonista."""
 
 
 def comprimir_imagen(data: bytes, max_px: int = 1024) -> bytes:
