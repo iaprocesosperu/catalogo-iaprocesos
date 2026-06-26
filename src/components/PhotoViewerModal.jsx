@@ -179,12 +179,68 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
     notify('↩️ Se mantuvo la foto original')
   }
 
-  const touchX = useRef(null)
-  const onTouchStart = e => touchX.current = e.touches[0].clientX
+  // ── ZOOM ──
+  const [scale, setScale] = useState(1)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const lastTap = useRef(0)
+  const pinchRef = useRef(null) // { dist, scale, offsetX, offsetY }
+  const isDragging = useRef(false)
+  const dragStart = useRef(null)
+
+  const resetZoom = () => { setScale(1); setOffset({ x: 0, y: 0 }) }
+
+  const getPinchDist = (touches) => {
+    const dx = touches[0].clientX - touches[1].clientX
+    const dy = touches[0].clientY - touches[1].clientY
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+
+  const onTouchStart = e => {
+    if (e.touches.length === 2) {
+      // Inicio de pinch
+      pinchRef.current = { dist: getPinchDist(e.touches), scale, offsetX: offset.x, offsetY: offset.y }
+      touchX.current = null
+    } else if (e.touches.length === 1) {
+      const now = Date.now()
+      if (now - lastTap.current < 300) {
+        // Doble tap — toggle zoom 1x / 2.5x
+        if (scale > 1) { resetZoom() } else { setScale(2.5); setOffset({ x: 0, y: 0 }) }
+        lastTap.current = 0
+      } else {
+        lastTap.current = now
+        if (scale > 1) {
+          isDragging.current = true
+          dragStart.current = { x: e.touches[0].clientX - offset.x, y: e.touches[0].clientY - offset.y }
+        } else {
+          touchX.current = e.touches[0].clientX
+        }
+      }
+    }
+  }
+
+  const onTouchMove = e => {
+    if (e.touches.length === 2 && pinchRef.current) {
+      e.preventDefault()
+      const newDist = getPinchDist(e.touches)
+      const ratio = newDist / pinchRef.current.dist
+      const newScale = Math.max(1, Math.min(5, pinchRef.current.scale * ratio))
+      setScale(newScale)
+      if (newScale <= 1) setOffset({ x: 0, y: 0 })
+    } else if (e.touches.length === 1 && isDragging.current && dragStart.current) {
+      e.preventDefault()
+      setOffset({ x: e.touches[0].clientX - dragStart.current.x, y: e.touches[0].clientY - dragStart.current.y })
+    }
+  }
+
   const onTouchEnd = e => {
+    pinchRef.current = null
+    if (isDragging.current) { isDragging.current = false; dragStart.current = null; return }
     if (touchX.current === null) return
     const dx = e.changedTouches[0].clientX - touchX.current
-    if (Math.abs(dx) > 50) { if (dx < 0 && idx < fotos.length - 1) setIdx(idx + 1); else if (dx > 0 && idx > 0) setIdx(idx - 1) }
+    if (Math.abs(dx) > 50 && scale <= 1) {
+      if (dx < 0 && idx < fotos.length - 1) { setIdx(idx + 1); resetZoom() }
+      else if (dx > 0 && idx > 0) { setIdx(idx - 1); resetZoom() }
+    }
     touchX.current = null
   }
 
@@ -192,7 +248,7 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.97)', zIndex: 9500, display: 'flex', flexDirection: 'column' }}
-      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
 
       {cam && <CamModal onCapture={onCamCapture} onClose={() => setCam(false)} />}
       <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFileSelect} style={{ display: 'none' }} />
@@ -236,7 +292,7 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
             </div>
           </div>
         ) : fAct ? (
-          <img src={fAct.url} alt="" style={{ maxWidth: '94%', maxHeight: '94%', objectFit: 'contain', borderRadius: 8 }} />
+          <img src={fAct.url} alt="" style={{ maxWidth: '94%', maxHeight: '94%', objectFit: 'contain', borderRadius: 8, transform: `scale(${scale}) translate(${offset.x/scale}px, ${offset.y/scale}px)`, transformOrigin: 'center', transition: isDragging.current || pinchRef.current ? 'none' : 'transform 0.2s', touchAction: 'none', userSelect: 'none' }} />
         ) : (
           <div style={{ color: '#555', textAlign: 'center' }}>
             <p style={{ fontSize: 48 }}>📦</p>
@@ -244,16 +300,22 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
           </div>
         )}
         {fotos.length > 1 && idx > 0 && (
-          <button onClick={() => setIdx(idx - 1)} style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', fontSize: 26, width: 44, height: 44, borderRadius: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+          <button onClick={() => { setIdx(idx - 1); resetZoom() }} style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', fontSize: 26, width: 44, height: 44, borderRadius: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
         )}
         {fotos.length > 1 && idx < fotos.length - 1 && (
-          <button onClick={() => setIdx(idx + 1)} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', fontSize: 26, width: 44, height: 44, borderRadius: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+          <button onClick={() => { setIdx(idx + 1); resetZoom() }} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', fontSize: 26, width: 44, height: 44, borderRadius: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
         )}
         {fAct?.es_principal && (
           <div style={{ position: 'absolute', top: 8, left: 8, background: G.gold, color: '#fff', padding: '3px 8px', borderRadius: 6, fontSize: 9, fontWeight: 700 }}>⭐ PRINCIPAL</div>
         )}
         {fotos.length > 1 && (
           <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '3px 8px', borderRadius: 6, fontSize: 10 }}>{idx + 1}/{fotos.length}</div>
+        )}
+        {scale > 1 && (
+          <button onClick={resetZoom} style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>🔍 {scale.toFixed(1)}x ✕</button>
+        )}
+        {scale <= 1 && fAct && (
+          <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.4)', color: '#888', padding: '3px 10px', borderRadius: 6, fontSize: 9 }}>👌 Pellizca para zoom • 2x tap para agrandar</div>
         )}
       </div>
 
