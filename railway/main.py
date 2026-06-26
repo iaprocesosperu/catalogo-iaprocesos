@@ -36,7 +36,7 @@ COMPOSICIÓN: Prenda completamente visible de arriba a abajo, centrada, con espa
 
 COLOR: Conserva exactamente el color real de la prenda sin alterar tonos.
 
-LIMPIEZA: Elimina etiquetas de precio, códigos de barras y elementos del fondo original. No elimines nada de la prenda misma.
+LIMPIEZA — MUY IMPORTANTE: Elimina ÚNICAMENTE las etiquetas externas de precio (etiqueta pequeña amarilla colgante) y etiquetas de código de barras (etiqueta pequeña celeste o blanca con números). NO elimines ni modifiques las etiquetas cosidas dentro de la prenda como etiqueta de marca, etiqueta de talla, etiqueta de composición de tela — estas son parte del producto y deben conservarse.
 
 RESULTADO: Foto de catálogo profesional donde la textura y materiales de la prenda sean el protagonista."""
 
