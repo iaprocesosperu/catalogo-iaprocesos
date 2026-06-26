@@ -37,7 +37,7 @@ COMPOSICIÓN: Prenda completamente visible de arriba a abajo, centrada, con espa
 COLOR: Conserva exactamente el color real de la prenda sin alterar tonos.
 
 LIMPIEZA — MUY IMPORTANTE: Elimina ÚNICAMENTE las etiquetas externas de precio (etiqueta pequeña amarilla colgante) y etiquetas de código de barras (etiqueta pequeña celeste o blanca con números). 
-ETIQUETAS DE MARCA — CRÍTICO: NO toques, NO muevas, NO cambies el color, NO alteres el texto ni el diseño de ninguna etiqueta cosida en la prenda (etiqueta de marca, etiqueta de talla, etiqueta de composición). Estas etiquetas deben aparecer exactamente igual que en la foto original — mismo color, mismo texto, mismo tamaño, misma posición. Son parte de la identidad del producto.
+ETIQUETAS DE MARCA — CRÍTICO: NO toques, NO muevas, NO cambies el color ni el diseño de ninguna etiqueta cosida en la prenda (etiqueta de marca, etiqueta de talla, etiqueta de composición). Deben aparecer exactamente igual que en la foto original — mismo color, mismo tamaño, misma posición. PROHIBIDO INVENTAR TEXTO: Si en la foto original el texto de la etiqueta no se lee claramente (aparece borroso, como sombra o manchas), déjalo exactamente así — como sombra indistinta. NO escribas, NO generes, NO inventes ningún texto, marca, nombre o letra que no sea perfectamente legible en la foto original. Es preferible una etiqueta sin texto visible que una con texto inventado.
 
 RESULTADO: Foto de catálogo profesional donde la textura y materiales de la prenda sean el protagonista."""
 
@@ -87,7 +87,7 @@ async def mejorar_foto(
         files = {"image": ("product.png", compressed, "image/png")}
         data_form = {
             "model": "gpt-image-1-mini",
-            "quality": "medium",  # medium desde servidor para mejor calidad que low
+            "quality": "high",  # medium desde servidor para mejor calidad que low
             "size": "1024x1024",
             "prompt": PROMPT,
         }
