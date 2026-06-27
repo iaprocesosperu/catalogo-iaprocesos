@@ -32,6 +32,7 @@ export default function RegistrarScreen(P) {
   const [newCatName, setNewCatName] = useState('')
   const [newCatTallas, setNewCatTallas] = useState('')
   const [showNewCol, setShowNewCol] = useState(false)
+  const [listaSelRapida, setListaSelRapida] = useState('')
   const [newColName, setNewColName] = useState('')
   const [errFields, setErrFields] = useState([])
   const fileRef = useRef(null)
@@ -169,7 +170,7 @@ export default function RegistrarScreen(P) {
     const tallas = newCatTallas ? newCatTallas.split(',').map(t => t.trim()).filter(Boolean) : []
     const { data, error } = await supabase.from('categorias').insert({ empresa_id: eid, linea_id: lid, nombre: newCatName.trim(), tallas, atributos: [] }).select().single()
     if (error) { notify('Error: ' + error.message, 'error'); return }
-    await loadAll(); s('categoria_id', String(data.id)); setShowNewCat(false); setNewCatName(''); setNewCatTallas(''); notify('Categoría creada')
+    await loadAll(); s('categoria_id', String(data.id)); setShowNewCat(false); setNewCatName(''); setNewCatTallas(''); setListaSelRapida(''); notify('Categoría creada')
   }
 
   const crearColRapido = async () => {
@@ -554,9 +555,14 @@ export default function RegistrarScreen(P) {
           {showNewCat && (
             <div style={{ background: G.goldLt, borderRadius: 8, padding: 10, marginBottom: 8 }}>
               <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Nombre categoría" style={iS(G)} />
-              <input value={newCatTallas} onChange={e => setNewCatTallas(e.target.value)} placeholder="Tallas: XS, S, M, L (vacío si no aplica)" style={iS(G)} />
+              <label style={{ fontSize: 11, color: G.muted }}>Lista de tallas</label>
+              <select value={listaSelRapida} onChange={e => { setListaSelRapida(e.target.value); const l = (P.listaTallas||[]).find(x => x.id === parseInt(e.target.value)); if(l) setNewCatTallas(l.tallas.join(', ')) }} style={sS(G)}>
+                <option value="">— Elegir lista —</option>
+                {(P.listaTallas||[]).filter(l => l.activo !== false).map(l => <option key={l.id} value={l.id}>{l.nombre} ({l.tallas?.join(', ')})</option>)}
+              </select>
+              <input value={newCatTallas} onChange={e => { setNewCatTallas(e.target.value); setListaSelRapida('') }} placeholder="O escribe: XS, S, M, L (vacío si no aplica)" style={iS(G)} />
               <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => { setShowNewCat(false); setNewCatName(''); setNewCatTallas('') }} style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={() => { setShowNewCat(false); setNewCatName(''); setNewCatTallas(''); setListaSelRapida('') }} style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
                 <button onClick={crearCatRapido} disabled={!newCatName.trim()} style={{ flex: 1, padding: 8, borderRadius: 6, border: 'none', background: newCatName.trim() ? G.gold : '#ccc', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Crear y seleccionar</button>
               </div>
             </div>
