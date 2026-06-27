@@ -173,6 +173,28 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
     }
   }
 
+  const copiarAlPortapapeles = async (url) => {
+    try {
+      const resp = await fetch(url)
+      const blob = await resp.blob()
+      // Convertir a PNG si no lo es (requerido por clipboard API)
+      const img = new Image()
+      const blobUrl = URL.createObjectURL(blob)
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = blobUrl })
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+      canvas.getContext('2d').drawImage(img, 0, 0)
+      URL.revokeObjectURL(blobUrl)
+      const pngBlob = await new Promise(res => canvas.toBlob(res, 'image/png'))
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })])
+      notify('📋 Foto copiada al portapapeles')
+    } catch (e) {
+      // Fallback: abrir en nueva pestaña para guardar manualmente
+      window.open(url, '_blank')
+      notify('Abre la foto y guárdala manualmente', 'error')
+    }
+  }
+
   const descartarMejora = () => {
     if (fotoMejorada) URL.revokeObjectURL(fotoMejorada.url)
     setFotoMejorada(null)
@@ -345,6 +367,7 @@ export default function PhotoViewerModal({ prod, emp, notify, loadAll, onClose }
               {emp?.api_openai_key && (
                 <button onClick={() => mejorar(fAct)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#6C47FF', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✨ Mejorar IA</button>
               )}
+              <button onClick={() => copiarAlPortapapeles(fAct.url)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#2563EB', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>📋 Copiar</button>
               <button onClick={() => downloadPhoto(fAct.url, prod.codigo + (fotos.length > 1 ? '_' + (idx + 1) : ''))} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#333', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>📥</button>
               <button onClick={() => eliminar(fAct)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: '#C0392B', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>🗑</button>
             </div>

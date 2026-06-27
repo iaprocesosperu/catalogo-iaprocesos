@@ -239,6 +239,26 @@ export default function RegistrarScreen(P) {
     notify('🖼️ Ambas fotos guardadas — mejorada como principal')
   }
 
+  const copiarAlPortapapeles = async (url) => {
+    try {
+      const resp = await fetch(url)
+      const blob = await resp.blob()
+      const img = new Image()
+      const blobUrl = URL.createObjectURL(blob)
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = blobUrl })
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+      canvas.getContext('2d').drawImage(img, 0, 0)
+      URL.revokeObjectURL(blobUrl)
+      const pngBlob = await new Promise(res => canvas.toBlob(res, 'image/png'))
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })])
+      notify('📋 Foto copiada — pégala en ChatGPT')
+    } catch (e) {
+      window.open(url, '_blank')
+      notify('Abre la foto y guárdala manualmente', 'error')
+    }
+  }
+
   const descartarFotoMejorada = () => {
     if (fotoMejorada) URL.revokeObjectURL(fotoMejorada.url)
     setFotoMejorada(null)
@@ -414,6 +434,10 @@ export default function RegistrarScreen(P) {
                   ✨ Mejorar IA
                 </button>
               )}
+              <button onClick={()=>copiarAlPortapapeles(foto.url)}
+                style={{flex:1,padding:'12px 0',borderRadius:10,border:'none',background:'#2563EB',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                📋 Copiar
+              </button>
               <button onClick={()=>{setCam('foto');setFotoViewer(null)}}
                 style={{flex:1,padding:'12px 0',borderRadius:10,border:'1px solid rgba(197,165,90,0.5)',background:'rgba(197,165,90,0.1)',color:G.gold,fontSize:13,fontWeight:700,cursor:'pointer'}}>
                 🔄 Cambiar
