@@ -6,8 +6,9 @@ import CatalogoScreen from './screens/CatalogoScreen'
 import RegistrarScreen from './screens/RegistrarScreen'
 import BuscarScreen from './screens/BuscarScreen'
 import VentaScreen from './screens/VentaScreen'
-import { SubMenu, OrigenesScr, CatsScr, MantScr, ClientesScr, StockScr, HistorialScr, ListasTallasScr, SeccionesScr, PedidosScr, InventarioScr, ConciliacionScr, MarketingScr } from './screens/OtrasScreens'
+import { SubMenu, OrigenesScr, CatsScr, MantScr, ClientesScr, StockScr, HistorialScr, ListasTallasScr, SeccionesScr, PedidosScr, InventarioScr, ConciliacionScr, MarketingScr, PromoCreatorScr } from './screens/OtrasScreens'
 import PublicProductPage from './screens/PublicProductPage'
+import PromoPage from './screens/PromoPage'
 
 /* ═══ LOGIN ═══ */
 function AccessScreen({ login, loading }) {
@@ -100,9 +101,8 @@ export default function App() {
   const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, cols, prods: pF, allProds: prods, clis, vents, listaTallas, secciones, pedidos, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G }
 
   // Página pública de producto
-  if (window.location.pathname.startsWith('/comprar/')) {
-    return <PublicProductPage />
-  }
+  if (window.location.pathname.startsWith('/comprar/')) return <PublicProductPage />
+  if (window.location.pathname.startsWith('/promo/')) return <PromoPage />
 
   return (
     <div style={{ maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: G.bg, position: 'relative', paddingBottom: 68 }}>
@@ -130,6 +130,7 @@ export default function App() {
       {scr === 'inventario' && <InventarioScr {...P} />}
       {scr === 'conciliacion' && <ConciliacionScr {...P} />}
       {scr === 'marketing' && <MarketingScr {...P} />}
+      {scr === 'promos' && <PromoCreatorScr {...P} />}
       {emp && scr !== 'access' && <NavBar scr={scr} setScr={setScr} setEditP={setEditP} />}
     </div>
   )

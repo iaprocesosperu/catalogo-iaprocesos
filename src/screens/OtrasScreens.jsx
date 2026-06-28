@@ -19,6 +19,7 @@ export function SubMenu(P) {
     { id: 'inventario', i: '📦', l: 'Inventario', d: 'Conteo físico' },
     { id: 'conciliacion', i: '🔄', l: 'Conciliación', d: 'Yape vs ventas' },
     { id: 'marketing', i: '📲', l: 'WhatsApp', d: 'Enviar catálogo' },
+    { id: 'promos', i: '🎯', l: 'Promociones', d: 'Links de promo' },
     { id: 'clientes', i: '👥', l: 'Clientes', d: 'Gestión clientes' },
     { id: 'stock', i: '📊', l: 'Stock', d: 'Inventario' },
     { id: 'historial', i: '📋', l: 'Ventas', d: 'Historial' }
@@ -1119,6 +1120,193 @@ export function MarketingScr(P) {
               )}
             </div>
           </Crd>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ═══ CREADOR DE PROMOCIONES ═══ */
+export function PromoCreatorScr(P) {
+  const { eid, tit, prods, emp, notify, setScr } = P
+  const [selProds, setSelProds] = useState([])
+  const [nombre, setNombre] = useState('')
+  const [fechaVence, setFechaVence] = useState('')
+  const [promoCreada, setPromoCreada] = useState(null)
+  const [guardando, setGuardando] = useState(false)
+  const [misPromos, setMisPromos] = useState([])
+  const [vista, setVista] = useState('lista') // lista | crear
+  const BASE_URL = window.location.origin
+
+  useEffect(() => { cargarPromos() }, [])
+
+  const cargarPromos = async () => {
+    const { data } = await supabase.from('promociones').select('*').eq('empresa_id', eid).eq('activo', true).order('created_at', { ascending: false })
+    setMisPromos(data || [])
+  }
+
+  const toggleProd = (p) => {
+    setSelProds(prev => prev.find(x => x.id === p.id) ? prev.filter(x => x.id !== p.id) : [...prev, p])
+  }
+
+  const generarCodigo = () => Math.random().toString(36).substring(2, 8).toUpperCase()
+
+  const crearPromo = async () => {
+    if (!selProds.length) { notify('Selecciona al menos un producto', 'error'); return }
+    setGuardando(true)
+    try {
+      const codigo = generarCodigo()
+      const { data, error } = await supabase.from('promociones').insert({
+        empresa_id: eid, codigo, nombre: nombre.trim() || 'Promoción especial',
+        producto_ids: selProds.map(p => p.id),
+        fecha_vence: fechaVence || null
+      }).select().single()
+      if (error) throw error
+      setPromoCreada(data)
+      await cargarPromos()
+      notify('✅ Promoción creada')
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setGuardando(false)
+  }
+
+  const compartir = async (promo) => {
+    const url = `${BASE_URL}/promo/${promo.codigo}`
+    if (navigator.share) {
+      try {
+        // Obtener fotos de los productos
+        const { data: ps } = await supabase.from('productos').select('foto_url,nombre').in('id', promo.producto_ids).eq('activo', true)
+        const fotosDisp = (ps || []).filter(p => p.foto_url)
+        if (fotosDisp.length > 0) {
+          // Descargar fotos y compartir
+          const blobs = await Promise.all(fotosDisp.slice(0, 10).map(p => fetch(p.foto_url).then(r => r.blob())))
+          const files = blobs.map((b, i) => new File([b], `foto_${i+1}.jpg`, { type: 'image/jpeg' }))
+          await navigator.share({ files, title: promo.nombre || 'Promoción', text: `🛍️ ${promo.nombre || 'Promoción especial'}
+
+👆 Toca para ver y comprar:
+${url}` })
+        } else {
+          await navigator.share({ title: promo.nombre || 'Promoción', text: `🛍️ ${promo.nombre || 'Promoción especial'}
+
+👆 Ver y comprar:
+${url}`, url })
+        }
+      } catch (e) { if (e.name !== 'AbortError') { navigator.clipboard.writeText(url); notify('📋 Link copiado') } }
+    } else {
+      navigator.clipboard.writeText(url); notify('📋 Link copiado al portapapeles')
+    }
+  }
+
+  const copiarLink = (promo) => {
+    const url = `${BASE_URL}/promo/${promo.codigo}`
+    navigator.clipboard.writeText(url)
+    notify('📋 Link copiado')
+  }
+
+  const desactivar = async (id) => {
+    if (!confirm('¿Desactivar esta promoción?')) return
+    await supabase.from('promociones').update({ activo: false }).eq('id', id)
+    notify('Promoción desactivada'); await cargarPromos()
+  }
+
+  return (
+    <div>
+      <Hdr tit={tit} sec="🎯 Promociones" onBack={() => setScr('submenu')} />
+      <div style={{ padding: 16 }}>
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button onClick={() => setVista('lista')} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: vista === 'lista' ? G.gold : G.goldSf, color: vista === 'lista' ? '#fff' : G.goldDk, fontWeight: 700, cursor: 'pointer' }}>Mis promos</button>
+          <button onClick={() => { setVista('crear'); setPromoCreada(null); setSelProds([]); setNombre(''); setFechaVence('') }} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: vista === 'crear' ? G.gold : G.goldSf, color: vista === 'crear' ? '#fff' : G.goldDk, fontWeight: 700, cursor: 'pointer' }}>➕ Nueva promo</button>
+        </div>
+
+        {/* Lista de promos existentes */}
+        {vista === 'lista' && (
+          <>
+            {misPromos.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: G.muted }}>
+                <p style={{ fontSize: 40 }}>🎯</p>
+                <p>No tienes promociones activas</p>
+                <button onClick={() => setVista('crear')} style={{ marginTop: 12, padding: '10px 20px', borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Crear primera promo</button>
+              </div>
+            ) : misPromos.map(pr => (
+              <div key={pr.id} style={{ background: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, border: '1px solid ' + G.border }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
+                  <div>
+                    <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{pr.nombre || 'Promoción especial'}</p>
+                    <p style={{ fontSize: 10, color: G.muted, margin: '2px 0 0' }}>{pr.producto_ids?.length} productos • Código: {pr.codigo}</p>
+                    {pr.fecha_vence && <p style={{ fontSize: 10, color: G.warn, margin: '2px 0 0' }}>Vence: {pr.fecha_vence}</p>}
+                  </div>
+                  <button onClick={() => desactivar(pr.id)} style={{ background: '#FEE2E2', color: G.err, border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 10 }}>🗑</button>
+                </div>
+                <div style={{ background: G.goldLt, borderRadius: 8, padding: '8px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <p style={{ fontSize: 11, color: G.goldDk, margin: 0, fontFamily: 'monospace' }}>{window.location.origin}/promo/{pr.codigo}</p>
+                  <button onClick={() => copiarLink(pr)} style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 10, marginLeft: 8, whiteSpace: 'nowrap' }}>📋 Copiar</button>
+                </div>
+                <button onClick={() => compartir(pr)} style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: 'none', background: '#25D366', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  📤 Compartir fotos + link por WhatsApp
+                </button>
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* Crear nueva promo */}
+        {vista === 'crear' && !promoCreada && (
+          <>
+            <Crd title="Datos de la promoción">
+              <label style={{ fontSize: 11, color: G.muted }}>Nombre (opcional)</label>
+              <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Ofertas de verano, Liquidación..." style={iS(G)} />
+              <label style={{ fontSize: 11, color: G.muted }}>Vence el (opcional)</label>
+              <input value={fechaVence} onChange={e => setFechaVence(e.target.value)} type="date" style={iS(G)} />
+            </Crd>
+
+            <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: G.text }}>Selecciona productos ({selProds.length})</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+              {prods.filter(p => p.cantidad > 0).map(p => {
+                const sel = selProds.find(x => x.id === p.id)
+                return (
+                  <div key={p.id} onClick={() => toggleProd(p)}
+                    style={{ background: '#fff', borderRadius: 10, overflow: 'hidden', border: sel ? '2px solid ' + G.gold : '2px solid transparent', cursor: 'pointer', position: 'relative', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                    {sel && <div style={{ position: 'absolute', top: 6, right: 6, background: G.gold, color: '#fff', borderRadius: 12, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, zIndex: 1 }}>✓</div>}
+                    {p.foto_url ? <img src={p.foto_url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover' }} />
+                      : <div style={{ width: '100%', height: 100, background: G.goldLt, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 28, opacity: 0.3 }}>👗</span></div>}
+                    <div style={{ padding: 8 }}>
+                      <p style={{ fontSize: 11, fontWeight: 600, margin: 0, lineHeight: 1.2 }}>{p.nombre}</p>
+                      <p style={{ fontSize: 12, fontWeight: 800, color: G.gold, margin: '2px 0 0' }}>S/{p.precio_venta}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <button onClick={crearPromo} disabled={guardando || !selProds.length}
+              style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: selProds.length ? G.gold : '#ccc', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+              {guardando ? '⏳ Creando...' : `🎯 Crear promoción con ${selProds.length} producto${selProds.length !== 1 ? 's' : ''}`}
+            </button>
+          </>
+        )}
+
+        {/* Promo creada exitosamente */}
+        {promoCreada && (
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: 48, margin: 0 }}>🎉</p>
+            <h2 style={{ color: G.gold, fontSize: 20, fontWeight: 800, margin: '8px 0' }}>¡Promoción lista!</h2>
+            <div style={{ background: G.goldLt, borderRadius: 12, padding: 16, margin: '12px 0', border: '1px solid ' + G.border }}>
+              <p style={{ fontSize: 11, color: G.muted, margin: '0 0 4px' }}>Tu link de promoción:</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: G.goldDk, fontFamily: 'monospace', margin: 0, wordBreak: 'break-all' }}>{BASE_URL}/promo/{promoCreada.codigo}</p>
+            </div>
+            <button onClick={() => compartir(promoCreada)}
+              style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#25D366', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
+              📤 Compartir fotos + link por WhatsApp
+            </button>
+            <button onClick={() => copiarLink(promoCreada)}
+              style={{ width: '100%', padding: 12, borderRadius: 12, border: 'none', background: '#2563EB', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 10 }}>
+              📋 Copiar solo el link
+            </button>
+            <button onClick={() => { setVista('lista'); setPromoCreada(null) }}
+              style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 14, cursor: 'pointer' }}>
+              Ver mis promociones
+            </button>
+          </div>
         )}
       </div>
     </div>
