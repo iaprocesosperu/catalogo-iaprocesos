@@ -8,12 +8,13 @@ export default function RegistrarScreen(P) {
   const { eid, lid, tit, cats, oris, cols, notify, loadAll, setScr, editP, emp } = P
   const ep = editP
 
+  const { secciones } = P
   const [f, setF] = useState(ep ? {
     codigo: ep.codigo || '', nombre: ep.nombre || '', precio_costo: String(ep.precio_costo || ''),
     precio_venta: String(ep.precio_venta || ''), color: ep.color || '', cantidad: String(ep.cantidad || 1),
     categoria_id: ep.categoria_id || '', origen_id: ep.origen_id || '', observacion: ep.observacion || '',
-    atributos: ep.atributos || {}
-  } : { codigo: '', nombre: '', precio_costo: '', precio_venta: '', color: '', cantidad: '1', categoria_id: '', origen_id: '', observacion: '', atributos: {} })
+    atributos: ep.atributos || {}, seccion_id: ep.seccion_id || ''
+  } : { codigo: '', nombre: '', precio_costo: '', precio_venta: '', color: '', cantidad: '1', categoria_id: '', origen_id: '', observacion: '', atributos: {}, seccion_id: '' })
 
   // ── FOTOS (múltiples) ──
   // Cada entrada: { id, url, es_principal, esNueva, file }
@@ -275,8 +276,9 @@ export default function RegistrarScreen(P) {
     if (!f.color) errs.push('color')
     if (!f.precio_venta) errs.push('precio_venta')
     if (!f.cantidad) errs.push('cantidad')
+    if (!f.seccion_id) errs.push('seccion_id')
     if (errs.length > 0) {
-      const nm = { codigo: 'Código', origen_id: 'Origen', categoria_id: 'Categoría', color: 'Color', precio_venta: 'Precio Venta', cantidad: 'Cantidad' }
+      const nm = { codigo: 'Código', origen_id: 'Origen', categoria_id: 'Categoría', color: 'Color', precio_venta: 'Precio Venta', cantidad: 'Cantidad', seccion_id: 'Sección' }
       notify('Faltan campos: ' + errs.map(e => nm[e]).join(', '), 'error')
       setErrFields(errs); return
     }
@@ -345,6 +347,23 @@ export default function RegistrarScreen(P) {
         await supabase.from('fotos_producto').update({ es_principal: foto.es_principal }).eq('id', foto.id)
       }
 
+      // Vectorizar imagen para búsqueda visual (en background, no bloquea)
+      if (foto_url) {
+        const RAILWAY = import.meta.env.VITE_RAILWAY_URL || ''
+        if (RAILWAY) {
+          fetch(foto_url).then(r => r.blob()).then(blob => {
+            const fd = new FormData()
+            fd.append('imagen', new File([blob], 'foto.jpg', { type: 'image/jpeg' }))
+            fetch(RAILWAY + '/calcular-hash', { method: 'POST', body: fd })
+              .then(r => r.json())
+              .then(data => {
+                if (data.hash && prodId) {
+                  supabase.from('productos').update({ imagen_hash: data.hash }).eq('id', prodId)
+                }
+              }).catch(() => {})
+          }).catch(() => {})
+        }
+      }
       await loadAll()
       if (yNuevo) {
         setF(p => ({ ...p, codigo: '', nombre: '', color: '', cantidad: '1', observacion: '', atributos: {} }))
@@ -634,6 +653,14 @@ export default function RegistrarScreen(P) {
               <input value={f.cantidad} onChange={e => s('cantidad', e.target.value)} type="number" style={iE('cantidad')} />
             </div>
           </div>
+
+          <label style={{ fontSize: 11, color: errFields.includes('seccion_id') ? G.err : G.muted, fontWeight: errFields.includes('seccion_id') ? 700 : 400 }}>
+            Sección {errFields.includes('seccion_id') && '⚠ obligatoria'}
+          </label>
+          <select value={f.seccion_id} onChange={e => s('seccion_id', e.target.value)} style={sE('seccion_id')}>
+            <option value="">Seleccionar sección</option>
+            {(secciones||[]).map(sec => <option key={sec.id} value={sec.id}>{sec.nombre}{sec.descripcion ? ' — ' + sec.descripcion : ''}</option>)}
+          </select>
 
           <label style={{ fontSize: 11, color: G.muted }}>Nombre (auto-generado)</label>
           <input value={f.nombre} onChange={e => s('nombre', e.target.value)} style={iS(G)} />

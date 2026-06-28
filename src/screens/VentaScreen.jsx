@@ -44,7 +44,8 @@ export default function VentaScreen(P) {
         empresa_id: eid, producto_id: prod.id, cliente_id: cliId || null,
         codigo_producto: prod.codigo, nombre_producto: prod.nombre,
         precio_costo: prod.precio_costo, precio_venta_original: prod.precio_venta, precio_venta_real: parseFloat(precio),
-        cantidad: cant, total, metodo_pago: metodo, tipo_entrega: entrega, foto_yape: foto_yape_url, nota
+        cantidad: cant, total, metodo_pago: metodo, tipo_entrega: entrega, foto_yape: foto_yape_url, nota,
+        estado: 'entregado'
       })
       await supabase.from('productos').update({ cantidad: prod.cantidad - cant }).eq('id', prod.id)
       notify('¡Venta registrada! S/' + total.toFixed(2)); await loadAll(); setScr('catalogo')
@@ -110,7 +111,10 @@ export default function VentaScreen(P) {
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8, cursor: 'pointer' }}>
                 <input type="checkbox" checked={newC.acepta_publicidad} onChange={e => setNewC(p => ({ ...p, acepta_publicidad: e.target.checked }))} />Acepta publicidad
               </label>
-              <button onClick={crearCli} style={{ width: '100%', padding: 8, borderRadius: 6, border: 'none', background: G.gold, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Guardar</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setShowNew(false)} style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={crearCli} style={{ flex: 1, padding: 8, borderRadius: 6, border: 'none', background: G.gold, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Guardar</button>
+              </div>
             </div>
           )}
         </Crd>

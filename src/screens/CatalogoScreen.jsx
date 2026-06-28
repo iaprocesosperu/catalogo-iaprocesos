@@ -73,6 +73,7 @@ export default function CatalogoScreen(P) {
                 </div>
                 <p style={{ fontSize: 11, fontWeight: 600, margin: '3px 0 1px', color: G.text, lineHeight: 1.2 }}>{p.nombre}</p>
                 <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Stock: {p.cantidad} {p.color ? '• ' + p.color : ''}</p>
+                {p.secciones?.nombre && <p style={{ fontSize: 8, color: G.goldDk, margin: '1px 0 0', fontWeight: 600 }}>🗂️ {p.secciones.nombre}</p>}
                 <div style={{ display: 'flex', gap: 3, marginTop: 5 }}>
                   <button onClick={() => { setEditP(p); setScr('registrar') }} style={{ flex: 1, padding: 4, borderRadius: 5, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
                   <button onClick={() => { setVentaP(p); setScr('venta') }} disabled={p.cantidad <= 0} style={{ flex: 1, padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? G.gold : '#ccc', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Vender</button>

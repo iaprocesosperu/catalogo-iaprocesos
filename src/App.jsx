@@ -6,7 +6,8 @@ import CatalogoScreen from './screens/CatalogoScreen'
 import RegistrarScreen from './screens/RegistrarScreen'
 import BuscarScreen from './screens/BuscarScreen'
 import VentaScreen from './screens/VentaScreen'
-import { SubMenu, OrigenesScr, CatsScr, MantScr, ClientesScr, StockScr, HistorialScr, ListasTallasScr } from './screens/OtrasScreens'
+import { SubMenu, OrigenesScr, CatsScr, MantScr, ClientesScr, StockScr, HistorialScr, ListasTallasScr, SeccionesScr, PedidosScr, InventarioScr, ConciliacionScr, MarketingScr } from './screens/OtrasScreens'
+import PublicProductPage from './screens/PublicProductPage'
 
 /* ═══ LOGIN ═══ */
 function AccessScreen({ login, loading }) {
@@ -39,6 +40,8 @@ export default function App() {
   const [clis, setClis] = useState([])
   const [vents, setVents] = useState([])
   const [listaTallas, setListaTallas] = useState([])
+  const [secciones, setSecciones] = useState([])
+  const [pedidos, setPedidos] = useState([])
   const [loading, setLoading] = useState(false)
   const [notif, setNotif] = useState(null)
   const [editP, setEditP] = useState(null)
@@ -71,26 +74,35 @@ export default function App() {
 
   const loadAll = async (eid) => {
     const id = eid || emp?.id; if (!id) return
-    const [ln, ct, or, co, pr, cl, ve, lt] = await Promise.all([
+    const [ln, ct, or, co, pr, cl, ve, lt, sc, pd] = await Promise.all([
       supabase.from('lineas').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
       supabase.from('categorias').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
       supabase.from('origenes').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
       supabase.from('colores').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
-      supabase.from('productos').select('*,categorias(nombre),origenes(nombre),lineas(nombre)').eq('empresa_id', id).eq('activo', true).order('created_at', { ascending: false }),
+      supabase.from('productos').select('*,categorias(nombre),origenes(nombre),lineas(nombre),secciones(nombre)').eq('empresa_id', id).eq('activo', true).order('created_at', { ascending: false }),
       supabase.from('clientes').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
       supabase.from('ventas').select('*,clientes(nombre)').eq('empresa_id', id).order('created_at', { ascending: false }),
-      supabase.from('listas_tallas').select('*').eq('activo', true).order('nombre')
+      supabase.from('listas_tallas').select('*').eq('activo', true).order('nombre'),
+      supabase.from('secciones').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
+      supabase.from('pedidos').select('*').eq('empresa_id', id).order('created_at', { ascending: false })
     ])
     setLineas(ln.data || []); setCats(ct.data || []); setOris(or.data || []); setCols(co.data || [])
     setProds(pr.data || []); setClis(cl.data || []); setVents(ve.data || [])
     setListaTallas(lt.data || [])
+    setSecciones(sc.data || [])
+    setPedidos(pd.data || [])
     if (!linAct && ln.data?.length) setLinAct(ln.data[0])
   }
 
   const eid = emp?.id, lid = linAct?.id
   const tit = `${emp?.nombre || ''} › ${linAct?.nombre || ''}`
   const cF = cats.filter(c => c.linea_id === lid), oF = oris.filter(o => o.linea_id === lid), pF = prods.filter(p => p.linea_id === lid)
-  const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, cols, prods: pF, allProds: prods, clis, vents, listaTallas, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G }
+  const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, cols, prods: pF, allProds: prods, clis, vents, listaTallas, secciones, pedidos, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G }
+
+  // Página pública de producto
+  if (window.location.pathname.startsWith('/comprar/')) {
+    return <PublicProductPage />
+  }
 
   return (
     <div style={{ maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: G.bg, position: 'relative', paddingBottom: 68 }}>
@@ -113,6 +125,11 @@ export default function App() {
       {scr === 'stock' && <StockScr {...P} />}
       {scr === 'historial' && <HistorialScr {...P} />}
       {scr === 'listaTallas' && <ListasTallasScr {...P} />}
+      {scr === 'secciones' && <SeccionesScr {...P} />}
+      {scr === 'pedidos' && <PedidosScr {...P} />}
+      {scr === 'inventario' && <InventarioScr {...P} />}
+      {scr === 'conciliacion' && <ConciliacionScr {...P} />}
+      {scr === 'marketing' && <MarketingScr {...P} />}
       {emp && scr !== 'access' && <NavBar scr={scr} setScr={setScr} setEditP={setEditP} />}
     </div>
   )

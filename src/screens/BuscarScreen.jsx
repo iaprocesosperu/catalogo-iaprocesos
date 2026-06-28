@@ -7,6 +7,7 @@ import { CamModal, Hdr } from '../components/index'
 export default function BuscarScreen(P) {
   const { tit, allProds, notify, setScr, setEditP, setVentaP } = P
   const [modo, setModo] = useState('texto')
+  const [busqVisual, setBusqVisual] = useState(false)
   const [q, setQ] = useState('')
   const [results, setResults] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -31,6 +32,27 @@ export default function BuscarScreen(P) {
     setBusy(false)
   }
 
+  const buscarPorSimilitud = async (blob) => {
+    setBusy(true)
+    try {
+      if (!RAILWAY) { notify('Backend no configurado', 'error'); setBusy(false); return }
+      // Obtener hashes de productos con foto
+      const prodsConHash = allProds.filter(p => p.imagen_hash)
+      if (!prodsConHash.length) { notify('No hay productos vectorizados aún. Vectoriza primero.', 'error'); setBusy(false); return }
+      const hashes = JSON.stringify(prodsConHash.map(p => ({ id: p.id, hash: p.imagen_hash, codigo: p.codigo, nombre: p.nombre })))
+      const fd = new FormData()
+      fd.append('imagen', blob instanceof File ? blob : new File([blob], 'search.jpg'))
+      const resp = await fetch(RAILWAY + '/buscar-similar', { method: 'POST', headers: { 'hashes': hashes }, body: fd })
+      const data = await resp.json()
+      if (data.resultados?.length) {
+        const ids = new Set(data.resultados.map(r => r.id))
+        setResults(allProds.filter(p => ids.has(p.id)))
+        notify(data.resultados.length + ' producto(s) similares encontrados')
+      } else notify('No se encontraron productos similares', 'error')
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setBusy(false)
+  }
+
   const buscarPorFoto = async (blob) => {
     setBusy(true)
     try {
@@ -45,17 +67,17 @@ export default function BuscarScreen(P) {
     setBusy(false)
   }
 
-  const onCamProdCapture = b => { setCam(null); buscarPorFoto(b) }
-  const onFileSearch = e => { const f = e.target.files?.[0]; if (!f) return; buscarPorFoto(f); e.target.value = '' }
+  const onCamProdCapture = b => { setCam(null); if (modo === 'visual') buscarPorSimilitud(b); else buscarPorFoto(b) }
+  const onFileSearch = e => { const f = e.target.files?.[0]; if (!f) return; if (modo === 'visual') buscarPorSimilitud(f); else buscarPorFoto(f); e.target.value = '' }
 
   return (
     <div>
       <Hdr tit={tit} sec="🔍 Buscar" onBack={() => setScr('catalogo')} />
       {cam === 'scan' && <CamModal onCapture={onCamCapture} onClose={() => setCam(null)} />}
-      {cam === 'photo' && <CamModal onCapture={onCamProdCapture} onClose={() => setCam(null)} />}
+      {(cam === 'photo' || cam === 'visual') && <CamModal onCapture={onCamProdCapture} onClose={() => setCam(null)} />}
       <div style={{ padding: 16 }}>
         <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          {[{ id: 'texto', i: '⌨️', l: 'Nombre' }, { id: 'codigo', i: '📷', l: 'Foto código' }, { id: 'foto', i: '🖼️', l: 'Foto producto' }].map(m => (
+          {[{ id: 'texto', i: '⌨️', l: 'Nombre' }, { id: 'codigo', i: '📷', l: 'Foto código' }, { id: 'foto', i: '🖼️', l: 'Color' }, { id: 'visual', i: '🔍', l: 'Similar' }].map(m => (
             <button key={m.id} onClick={() => setModo(m.id)} style={{ flex: 1, padding: 8, borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer', background: modo === m.id ? G.gold : G.goldSf, color: modo === m.id ? '#fff' : G.goldDk }}>{m.i} {m.l}</button>
           ))}
         </div>
@@ -70,6 +92,19 @@ export default function BuscarScreen(P) {
             <span style={{ fontSize: 26, display: 'block' }}>{busy ? '⏳' : '📷'}</span>
             <span style={{ fontSize: 13, color: G.gold, fontWeight: 600 }}>{busy ? 'Leyendo...' : 'Escanear etiqueta'}</span>
           </button>
+        )}
+        {modo === 'visual' && (
+          <div>
+            <p style={{ fontSize: 11, color: G.muted, margin: '0 0 10px' }}>Toma o sube foto de una prenda para encontrar productos similares en tu catálogo.</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setCam('visual')} disabled={busy} style={{ flex: 1, padding: 18, borderRadius: 8, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
+                <span style={{ fontSize: 22, display: 'block' }}>📷</span><span style={{ fontSize: 11, color: G.gold, fontWeight: 600 }}>{busy ? 'Buscando...' : 'Cámara'}</span>
+              </button>
+              <button onClick={() => fileRef.current?.click()} disabled={busy} style={{ flex: 1, padding: 18, borderRadius: 8, border: '2px dashed ' + G.border, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
+                <span style={{ fontSize: 22, display: 'block' }}>📁</span><span style={{ fontSize: 11, color: G.muted, fontWeight: 600 }}>Galería</span>
+              </button>
+            </div>
+          </div>
         )}
         {modo === 'foto' && (
           <div style={{ display: 'flex', gap: 8 }}>

@@ -13,6 +13,11 @@ export function SubMenu(P) {
     { id: 'origenes', i: '📋', l: 'Orígenes', d: 'Fardos, entregas' },
     { id: 'colores', i: '🎨', l: 'Colores', d: 'Maestro de colores' },
     { id: 'listaTallas', i: '📐', l: 'Listas de Tallas', d: 'Mis listas de tallas' },
+    { id: 'secciones', i: '🗂️', l: 'Secciones', d: 'Zonas de la tienda' },
+    { id: 'pedidos', i: '🛒', l: 'Pedidos', d: 'Compras online' },
+    { id: 'inventario', i: '📦', l: 'Inventario', d: 'Conteo físico' },
+    { id: 'conciliacion', i: '🔄', l: 'Conciliación', d: 'Yape vs ventas' },
+    { id: 'marketing', i: '📲', l: 'WhatsApp', d: 'Enviar catálogo' },
     { id: 'clientes', i: '👥', l: 'Clientes', d: 'Gestión clientes' },
     { id: 'stock', i: '📊', l: 'Stock', d: 'Inventario' },
     { id: 'historial', i: '📋', l: 'Ventas', d: 'Historial' }
@@ -517,14 +522,14 @@ export function ClientesScr(P) {
   const { eid, tit, clis, notify, loadAll, setScr } = P
   const [showAdd, setShowAdd] = useState(false)
   const [editCli, setEditCli] = useState(null)
-  const [f, setF] = useState({ nombre: '', telefono: '', direccion: '', preferencias: '', acepta_publicidad: false })
+  const [f, setF] = useState({ nombre: '', telefono: '', direccion: '', preferencias: '', acepta_publicidad: false, genero: '', precio_min: '', precio_max: '' })
   const [buscar, setBuscar] = useState('')
   const formRef = useRef(null)
   const s = (k, v) => setF(p => ({ ...p, [k]: v }))
   const filt = clis.filter(c => !buscar || c.nombre?.toLowerCase().includes(buscar.toLowerCase()) || c.telefono?.includes(buscar))
 
   const abrir = (c) => {
-    if (c) { setEditCli(c); setF({ nombre: c.nombre || '', telefono: c.telefono || '', direccion: c.direccion || '', preferencias: c.preferencias || '', acepta_publicidad: c.acepta_publicidad || false }) }
+    if (c) { setEditCli(c); setF({ nombre: c.nombre || '', telefono: c.telefono || '', direccion: c.direccion || '', preferencias: c.preferencias || '', acepta_publicidad: c.acepta_publicidad || false, genero: c.genero || '', precio_min: c.precio_min || '', precio_max: c.precio_max || '' }) }
     else { setEditCli(null); setF({ nombre: '', telefono: '', direccion: '', preferencias: '', acepta_publicidad: false }) }
     setShowAdd(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
@@ -562,6 +567,16 @@ export function ClientesScr(P) {
                 <div style={{ flex: 1 }}><textarea value={f.preferencias} onChange={e => s('preferencias', e.target.value)} placeholder="Preferencias" rows={2} style={{ ...iS(G), resize: 'vertical' }} /></div>
                 <VoiceBtn onResult={t => s('preferencias', (f.preferencias ? f.preferencias + ' ' : '') + t)} />
               </div>
+              <label style={{ fontSize: 11, color: G.muted }}>Género</label>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                {['Mujer','Hombre','Niño','Unisex'].map(g => (
+                  <button key={g} onClick={() => s('genero', f.genero === g ? '' : g)} style={{ flex: 1, padding: '6px 4px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer', background: f.genero === g ? G.gold : G.goldSf, color: f.genero === g ? '#fff' : G.goldDk }}>{g}</button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Precio mín (S/)</label><input value={f.precio_min||''} onChange={e => s('precio_min', e.target.value)} type="number" placeholder="10" style={iS(G)} /></div>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Precio máx (S/)</label><input value={f.precio_max||''} onChange={e => s('precio_max', e.target.value)} type="number" placeholder="50" style={iS(G)} /></div>
+              </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 8, cursor: 'pointer' }}>
                 <input type="checkbox" checked={f.acepta_publicidad} onChange={e => s('acepta_publicidad', e.target.checked)} />Acepta publicidad
               </label>
@@ -579,6 +594,7 @@ export function ClientesScr(P) {
                 <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{c.nombre}</p>
                 <p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{c.codigo} {c.telefono ? '• ' + c.telefono : ''} {c.direccion ? '• ' + c.direccion : ''}</p>
                 {c.preferencias && <p style={{ fontSize: 10, color: G.gold, margin: 0 }}>❤️ {c.preferencias}</p>}
+                {(c.genero || c.precio_min || c.precio_max) && <p style={{ fontSize: 9, color: G.muted, margin: '2px 0 0' }}>{c.genero || ''}{c.precio_min ? ' • S/' + c.precio_min + '-' + (c.precio_max||'∞') : ''}</p>}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'end' }}>
                 {c.acepta_publicidad && <span style={{ fontSize: 8, background: G.goldSf, color: G.goldDk, padding: '2px 6px', borderRadius: 4 }}>📢</span>}
@@ -639,6 +655,470 @@ export function HistorialScr(P) {
         </div>
         {vents.length === 0 ? (<div style={{ textAlign: 'center', padding: 40, color: G.muted }}><p style={{ fontSize: 32 }}>📋</p><p>No hay ventas</p></div>)
           : vents.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p></div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}</div></div></div>))}
+      </div>
+    </div>
+  )
+}
+
+/* ═══ SECCIONES ═══ */
+export function SeccionesScr(P) {
+  const { eid, tit, secciones, notify, loadAll, setScr } = P
+  const [showAdd, setShowAdd] = useState(false)
+  const [editId, setEditId] = useState(null)
+  const [nombre, setNombre] = useState('')
+  const [descripcion, setDescripcion] = useState('')
+  const formRef = useRef(null)
+
+  const abrir = (s) => {
+    if (s) { setEditId(s.id); setNombre(s.nombre); setDescripcion(s.descripcion || '') }
+    else { setEditId(null); setNombre(''); setDescripcion('') }
+    setShowAdd(true)
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
+
+  const guardar = async () => {
+    if (!nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
+    if (editId) {
+      await supabase.from('secciones').update({ nombre: nombre.trim(), descripcion: descripcion || null }).eq('id', editId)
+      notify('Sección actualizada')
+    } else {
+      await supabase.from('secciones').insert({ empresa_id: eid, nombre: nombre.trim(), descripcion: descripcion || null })
+      notify('Sección creada')
+    }
+    setShowAdd(false); setEditId(null); setNombre(''); setDescripcion('')
+    await loadAll()
+  }
+
+  const eliminar = async (s) => {
+    if (s.nombre === 'General') { notify('No puedes eliminar la sección General', 'error'); return }
+    const { data } = await supabase.from('productos').select('id').eq('seccion_id', s.id).eq('activo', true).limit(1)
+    if (data?.length > 0) { notify('Tiene productos asignados. Muévelos primero.', 'error'); return }
+    if (!confirm('¿Eliminar sección ' + s.nombre + '?')) return
+    await supabase.from('secciones').update({ activo: false }).eq('id', s.id)
+    notify('Eliminada'); await loadAll()
+  }
+
+  return (
+    <div>
+      <Hdr tit={tit} sec="🗂️ Secciones" onBack={() => setScr('submenu')} />
+      <div style={{ padding: 16 }}>
+        <p style={{ fontSize: 11, color: G.muted, margin: '0 0 12px' }}>Define las zonas o exhibidores de tu tienda para ubicar tus productos.</p>
+        <button onClick={() => abrir(null)} style={{ width: '100%', padding: 12, borderRadius: 8, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', color: G.gold, fontWeight: 700, fontSize: 13, marginBottom: 12 }}>
+          ➕ Nueva sección
+        </button>
+        {showAdd && (
+          <div ref={formRef}>
+            <Crd title={editId ? 'Editar sección' : 'Nueva sección'}>
+              <label style={{ fontSize: 11, color: G.muted }}>Nombre *</label>
+              <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Estante 1, Exhibidor Entrada..." style={iS(G)} />
+              <label style={{ fontSize: 11, color: G.muted }}>Descripción (opcional)</label>
+              <input value={descripcion} onChange={e => setDescripcion(e.target.value)} placeholder="Ej: Perchero lado izquierdo entrada" style={iS(G)} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => { setShowAdd(false); setEditId(null) }} style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={guardar} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{editId ? 'Actualizar' : 'Guardar'}</button>
+              </div>
+            </Crd>
+          </div>
+        )}
+        {secciones.map(s => (
+          <div key={s.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>🗂️ {s.nombre}</p>
+                  {s.nombre === 'General' && <span style={{ fontSize: 9, background: G.goldSf, color: G.goldDk, padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>Por defecto</span>}
+                </div>
+                {s.descripcion && <p style={{ fontSize: 10, color: G.muted, margin: '2px 0 0' }}>{s.descripcion}</p>}
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button onClick={() => abrir(s)} style={{ background: G.goldSf, color: G.goldDk, border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 10 }}>Editar</button>
+                {s.nombre !== 'General' && <button onClick={() => eliminar(s)} style={{ background: '#FEE2E2', color: G.err, border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 10 }}>🗑</button>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ═══ PEDIDOS ONLINE ═══ */
+export function PedidosScr(P) {
+  const { eid, tit, notify, setScr } = P
+  const [pedidos, setPedidos] = useState([])
+  const [cargando, setCargando] = useState(true)
+  const [fotoVer, setFotoVer] = useState(null)
+
+  useEffect(() => {
+    const cargar = async () => {
+      const { data } = await supabase.from('pedidos').select('*').eq('empresa_id', eid).order('created_at', { ascending: false })
+      setPedidos(data || []); setCargando(false)
+    }
+    cargar()
+  }, [])
+
+  const cambiarEstado = async (id, estado) => {
+    await supabase.from('pedidos').update({ estado }).eq('id', id)
+    setPedidos(ps => ps.map(p => p.id === id ? { ...p, estado } : p))
+    if (estado === 'verificado') notify('✅ Pedido verificado')
+    if (estado === 'cancelado') notify('Pedido cancelado')
+  }
+
+  const colorEstado = e => e === 'verificado' ? G.ok : e === 'cancelado' ? G.err : G.warn
+  const pendientes = pedidos.filter(p => p.estado === 'pendiente').length
+
+  return (
+    <div>
+      <Hdr tit={tit} sec="🛒 Pedidos Online" onBack={() => setScr('submenu')} />
+      {fotoVer && (
+        <div onClick={() => setFotoVer(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <img src={fotoVer} alt="" style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: 8 }} />
+        </div>
+      )}
+      <div style={{ padding: 16 }}>
+        {pendientes > 0 && (
+          <div style={{ background: G.warn, borderRadius: 10, padding: 12, marginBottom: 12, textAlign: 'center' }}>
+            <p style={{ color: '#fff', fontWeight: 700, fontSize: 14, margin: 0 }}>⚠️ {pendientes} pedido{pendientes > 1 ? 's' : ''} pendiente{pendientes > 1 ? 's' : ''} de verificar</p>
+          </div>
+        )}
+        {cargando ? <p style={{ textAlign: 'center', color: G.muted }}>⏳ Cargando...</p>
+          : pedidos.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: G.muted }}><p style={{ fontSize: 40 }}>🛒</p><p>Sin pedidos aún</p></div>
+          : pedidos.map(p => (
+            <div key={p.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 8, border: '1px solid ' + G.border }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 6 }}>
+                <div>
+                  <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>{p.nombre_cliente}</p>
+                  <p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{p.telefono_cliente || ''} • {new Date(p.created_at).toLocaleDateString('es-PE')}</p>
+                </div>
+                <span style={{ fontSize: 9, padding: '3px 8px', borderRadius: 6, fontWeight: 700, background: colorEstado(p.estado) + '22', color: colorEstado(p.estado) }}>
+                  {p.estado === 'pendiente' ? '⏳ Pendiente' : p.estado === 'verificado' ? '✅ Verificado' : '❌ Cancelado'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, margin: 0 }}>{p.nombre_producto}</p>
+                  <p style={{ fontSize: 11, color: G.gold, fontWeight: 700, margin: '2px 0 0' }}>S/{p.precio_venta}</p>
+                  {p.nota && <p style={{ fontSize: 10, color: G.muted, margin: '2px 0 0' }}>{p.nota}</p>}
+                </div>
+                {p.foto_comprobante && (
+                  <img src={p.foto_comprobante} alt="" onClick={() => setFotoVer(p.foto_comprobante)}
+                    style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', border: '2px solid ' + G.border }} />
+                )}
+              </div>
+              {p.estado === 'pendiente' && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => cambiarEstado(p.id, 'verificado')} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: G.ok, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✅ Verificar pago</button>
+                  <button onClick={() => cambiarEstado(p.id, 'cancelado')} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: G.err, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>❌ Cancelar</button>
+                </div>
+              )}
+            </div>
+          ))}
+      </div>
+    </div>
+  )
+}
+
+/* ═══ INVENTARIO FÍSICO ═══ */
+export function InventarioScr(P) {
+  const { eid, tit, allProds, notify, setScr } = P
+  const [escaneados, setEscaneados] = useState([])
+  const [procesando, setProcesando] = useState(false)
+  const [resultado, setResultado] = useState(null)
+  const [fase, setFase] = useState('inicio') // inicio | escaneando | resultado
+
+  const limpiar = async () => {
+    if (!confirm('¿Limpiar inventario actual y empezar de cero?')) return
+    await supabase.from('inventario_fisico').delete().eq('empresa_id', eid)
+    setEscaneados([]); setResultado(null); setFase('inicio'); notify('Inventario limpiado')
+  }
+
+  const procesarFoto = async (file) => {
+    setProcesando(true)
+    try {
+      const fd = new FormData()
+      fd.append('imagen', file)
+      const RAILWAY = import.meta.env.VITE_RAILWAY_URL || ''
+      const resp = await fetch(RAILWAY + '/ocr-etiqueta', { method: 'POST', body: fd })
+      const data = await resp.json()
+      if (data.codigo) {
+        const ya = escaneados.find(e => e.codigo === data.codigo)
+        if (!ya) {
+          const prod = allProds.find(p => p.codigo === data.codigo)
+          const nuevo = { codigo: data.codigo, nombre: prod?.nombre || '?', encontrado: !!prod }
+          setEscaneados(prev => [...prev, nuevo])
+          await supabase.from('inventario_fisico').insert({ empresa_id: eid, codigo: data.codigo, encontrado: !!prod })
+          notify(prod ? '✅ ' + data.codigo + ' — ' + prod.nombre : '⚠️ ' + data.codigo + ' no está en el sistema')
+        } else {
+          notify('Ya escaneado: ' + data.codigo)
+        }
+      } else notify('No se pudo leer el código', 'error')
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setProcesando(false)
+  }
+
+  const onFotos = async (e) => {
+    const files = Array.from(e.target.files || [])
+    setFase('escaneando')
+    for (const file of files) await procesarFoto(file)
+    e.target.value = ''
+  }
+
+  const comparar = () => {
+    const codsEscaneados = new Set(escaneados.map(e => e.codigo))
+    const codsSistema = new Set(allProds.map(p => p.codigo))
+    const encontrados = escaneados.filter(e => codsSistema.has(e.codigo))
+    const sobrantes = escaneados.filter(e => !codsSistema.has(e.codigo))
+    const faltantes = allProds.filter(p => !codsEscaneados.has(p.codigo))
+    setResultado({ encontrados, sobrantes, faltantes })
+    setFase('resultado')
+  }
+
+  return (
+    <div>
+      <Hdr tit={tit} sec="📦 Inventario Físico" onBack={() => setScr('submenu')} />
+      <div style={{ padding: 16 }}>
+        {fase === 'inicio' && (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <p style={{ fontSize: 48, margin: 0 }}>📦</p>
+            <p style={{ fontSize: 16, fontWeight: 700, margin: '8px 0' }}>Inventario físico</p>
+            <p style={{ fontSize: 13, color: G.muted, margin: '0 0 20px' }}>Toma fotos de las etiquetas de tus productos para hacer el conteo.</p>
+            <button onClick={() => setFase('escaneando')} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
+              📷 Iniciar escaneo
+            </button>
+            <button onClick={limpiar} style={{ width: '100%', padding: 12, borderRadius: 10, border: '2px solid ' + G.err, background: 'transparent', color: G.err, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              🗑 Limpiar inventario anterior
+            </button>
+          </div>
+        )}
+        {fase === 'escaneando' && (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <label style={{ flex: 1, padding: 14, borderRadius: 10, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', textAlign: 'center' }}>
+                <span style={{ fontSize: 22, display: 'block' }}>{procesando ? '⏳' : '📷'}</span>
+                <span style={{ fontSize: 12, color: G.gold, fontWeight: 600 }}>{procesando ? 'Leyendo...' : 'Fotografiar etiquetas'}</span>
+                <input type="file" accept="image/*" multiple onChange={onFotos} style={{ display: 'none' }} disabled={procesando} />
+              </label>
+            </div>
+            <p style={{ fontSize: 12, color: G.muted, margin: '0 0 8px' }}>{escaneados.length} productos escaneados</p>
+            {escaneados.map((e, i) => (
+              <div key={i} style={{ background: '#fff', borderRadius: 8, padding: 10, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid ' + G.border }}>
+                <span style={{ fontSize: 16 }}>{e.encontrado ? '✅' : '⚠️'}</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, margin: 0 }}>{e.codigo}</p>
+                  <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{e.nombre}</p>
+                </div>
+              </div>
+            ))}
+            {escaneados.length > 0 && (
+              <button onClick={comparar} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 12 }}>
+                📊 Ver resultado vs catálogo
+              </button>
+            )}
+          </>
+        )}
+        {fase === 'resultado' && resultado && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+              <div style={{ background: '#D1FAE5', borderRadius: 10, padding: 12, textAlign: 'center' }}><p style={{ fontSize: 22, fontWeight: 800, color: '#065F46', margin: 0 }}>{resultado.encontrados.length}</p><p style={{ fontSize: 10, color: '#065F46', margin: 0 }}>✅ OK</p></div>
+              <div style={{ background: '#FEF3C7', borderRadius: 10, padding: 12, textAlign: 'center' }}><p style={{ fontSize: 22, fontWeight: 800, color: '#92400E', margin: 0 }}>{resultado.sobrantes.length}</p><p style={{ fontSize: 10, color: '#92400E', margin: 0 }}>⚠️ Sobrantes</p></div>
+              <div style={{ background: '#FEE2E2', borderRadius: 10, padding: 12, textAlign: 'center' }}><p style={{ fontSize: 22, fontWeight: 800, color: G.err, margin: 0 }}>{resultado.faltantes.length}</p><p style={{ fontSize: 10, color: G.err, margin: 0 }}>🔴 Faltantes</p></div>
+            </div>
+            {resultado.sobrantes.length > 0 && (<><p style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>⚠️ Sobrantes (físico pero no en sistema):</p>{resultado.sobrantes.map((e, i) => <div key={i} style={{ background: '#FEF3C7', borderRadius: 8, padding: 8, marginBottom: 4, fontSize: 12 }}>{e.codigo}</div>)}</>)}
+            {resultado.faltantes.length > 0 && (<><p style={{ fontSize: 13, fontWeight: 700, color: G.err, marginTop: 12 }}>🔴 Faltantes (en sistema pero no encontrados):</p>{resultado.faltantes.map((p, i) => <div key={i} style={{ background: '#FEE2E2', borderRadius: 8, padding: 8, marginBottom: 4, fontSize: 12 }}>{p.codigo} — {p.nombre}</div>)}</>)}
+            <button onClick={() => setFase('escaneando')} style={{ width: '100%', padding: 12, borderRadius: 10, border: '2px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 12 }}>← Seguir escaneando</button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ═══ CONCILIACIÓN YAPE ═══ */
+export function ConciliacionScr(P) {
+  const { eid, tit, vents, notify, setScr } = P
+  const [resultado, setResultado] = useState(null)
+  const [cargando, setCargando] = useState(false)
+
+  const onExcel = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    setCargando(true)
+    try {
+      const { default: XLSX } = await import('xlsx')
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: 'buffer' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      // Buscar cabecera
+      const hdIdx = rows.findIndex(r => r.some(c => String(c).includes('Tipo')))
+      const data = rows.slice(hdIdx + 1).filter(r => String(r[0]).includes('TE PAGÓ'))
+      const yapeItems = data.map(r => ({
+        tipo: String(r[0] || '').trim(),
+        origen: String(r[1] || '').trim(),
+        monto: parseFloat(String(r[3]).replace(',', '.')) || 0,
+        mensaje: String(r[4] || '').trim(),
+        fecha: String(r[5] || '').trim().split(' ')[0]
+      })).filter(i => i.monto > 0)
+
+      // Ventas Yape del sistema
+      const ventasYape = vents.filter(v => v.metodo_pago === 'Yape')
+
+      const coinciden = [], soloYape = [], soloSistema = []
+      const usadas = new Set()
+
+      yapeItems.forEach(yi => {
+        const match = ventasYape.find(v => {
+          const key = v.id
+          if (usadas.has(key)) return false
+          const montoOk = Math.abs(v.total - yi.monto) < 0.01
+          const fechaOk = new Date(v.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }).split('/').reverse().join('-').startsWith(yi.fecha.split('/').reverse().join('-').substring(0, 7))
+          return montoOk && fechaOk
+        })
+        if (match) { usadas.add(match.id); coinciden.push({ yape: yi, venta: match }) }
+        else soloYape.push(yi)
+      })
+      ventasYape.filter(v => !usadas.has(v.id)).forEach(v => soloSistema.push(v))
+
+      setResultado({ coinciden, soloYape, soloSistema, total: yapeItems.length })
+    } catch (e) { notify('Error al procesar: ' + e.message, 'error') }
+    setCargando(false)
+    e.target.value = ''
+  }
+
+  return (
+    <div>
+      <Hdr tit={tit} sec="🔄 Conciliación Yape" onBack={() => setScr('submenu')} />
+      <div style={{ padding: 16 }}>
+        <div style={{ background: '#EFF6FF', borderRadius: 10, padding: 14, marginBottom: 16, border: '1px solid #BFDBFE' }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8', margin: '0 0 6px' }}>📋 Cómo usar:</p>
+          <p style={{ fontSize: 12, color: '#1E40AF', margin: '0 0 4px' }}>1. Abre Yape → Historial → Exportar reporte Excel</p>
+          <p style={{ fontSize: 12, color: '#1E40AF', margin: 0 }}>2. Sube el archivo aquí para cruzar con tus ventas</p>
+        </div>
+        <label style={{ display: 'block', padding: 20, borderRadius: 10, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', textAlign: 'center', marginBottom: 16 }}>
+          <span style={{ fontSize: 30, display: 'block', marginBottom: 4 }}>{cargando ? '⏳' : '📊'}</span>
+          <span style={{ fontSize: 14, color: G.gold, fontWeight: 600 }}>{cargando ? 'Procesando...' : 'Subir reporte Yape (.xlsx)'}</span>
+          <input type="file" accept=".xlsx,.xls" onChange={onExcel} style={{ display: 'none' }} disabled={cargando} />
+        </label>
+        {resultado && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+              <div style={{ background: '#D1FAE5', borderRadius: 10, padding: 12, textAlign: 'center' }}><p style={{ fontSize: 22, fontWeight: 800, color: '#065F46', margin: 0 }}>{resultado.coinciden.length}</p><p style={{ fontSize: 9, color: '#065F46', margin: 0 }}>✅ Coinciden</p></div>
+              <div style={{ background: '#FEF3C7', borderRadius: 10, padding: 12, textAlign: 'center' }}><p style={{ fontSize: 22, fontWeight: 800, color: '#92400E', margin: 0 }}>{resultado.soloYape.length}</p><p style={{ fontSize: 9, color: '#92400E', margin: 0 }}>⚠️ Solo Yape</p></div>
+              <div style={{ background: '#FEE2E2', borderRadius: 10, padding: 12, textAlign: 'center' }}><p style={{ fontSize: 22, fontWeight: 800, color: G.err, margin: 0 }}>{resultado.soloSistema.length}</p><p style={{ fontSize: 9, color: G.err, margin: 0 }}>🔴 Solo sistema</p></div>
+            </div>
+            {resultado.soloYape.length > 0 && (
+              <><p style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>⚠️ Pagos en Yape sin venta registrada:</p>
+                {resultado.soloYape.map((y, i) => <div key={i} style={{ background: '#FEF3C7', borderRadius: 8, padding: 10, marginBottom: 4, fontSize: 12 }}><strong>S/{y.monto}</strong> • {y.origen} • {y.fecha}{y.mensaje ? ' • ' + y.mensaje : ''}</div>)}</>
+            )}
+            {resultado.soloSistema.length > 0 && (
+              <><p style={{ fontSize: 13, fontWeight: 700, color: G.err, marginTop: 12 }}>🔴 Ventas Yape en sistema sin pago en reporte:</p>
+                {resultado.soloSistema.map((v, i) => <div key={i} style={{ background: '#FEE2E2', borderRadius: 8, padding: 10, marginBottom: 4, fontSize: 12 }}><strong>S/{v.total}</strong> • {v.nombre_producto} • {new Date(v.created_at).toLocaleDateString('es-PE')}</div>)}</>
+            )}
+            {resultado.coinciden.length > 0 && (
+              <><p style={{ fontSize: 13, fontWeight: 700, color: '#065F46', marginTop: 12 }}>✅ Pagos verificados ({resultado.coinciden.length}):</p>
+                {resultado.coinciden.map((c, i) => <div key={i} style={{ background: '#D1FAE5', borderRadius: 8, padding: 10, marginBottom: 4, fontSize: 12 }}><strong>S/{c.yape.monto}</strong> • {c.venta.nombre_producto} • {c.yape.origen}</div>)}</>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ═══ MARKETING WHATSAPP ═══ */
+export function MarketingScr(P) {
+  const { tit, prods, clis, emp, notify, setScr } = P
+  const [filtroGenero, setFiltroGenero] = useState('')
+  const [filtroPrecioMax, setFiltroPrecioMax] = useState('')
+  const [selProds, setSelProds] = useState([])
+  const [mensaje, setMensaje] = useState('')
+
+  const RAILWAY_URL = import.meta.env.VITE_RAILWAY_URL || ''
+
+  const clientesFiltrados = clis.filter(c => {
+    if (filtroGenero && c.genero !== filtroGenero) return false
+    if (filtroPrecioMax && c.precio_max && c.precio_max < parseFloat(filtroPrecioMax)) return false
+    return c.acepta_publicidad
+  })
+
+  const toggleProd = (p) => {
+    setSelProds(prev => prev.find(x => x.id === p.id) ? prev.filter(x => x.id !== p.id) : [...prev, p])
+  }
+
+  const generarMensaje = () => {
+    if (!selProds.length) { notify('Selecciona al menos un producto', 'error'); return }
+    const lineas = selProds.map(p => {
+      const link = `${window.location.origin}/comprar/${p.codigo}`
+      return `👗 *${p.nombre}* — S/${p.precio_venta}\n🛒 Comprar: ${link}`
+    })
+    const msg = `¡Hola! 👋 Mira estos productos de *${emp?.nombre}*:\n\n${lineas.join('\n\n')}\n\n📍 ${emp?.direccion || ''}\n📱 ${emp?.whatsapp || ''}`
+    setMensaje(msg)
+  }
+
+  const copiarMensaje = () => { navigator.clipboard.writeText(mensaje); notify('📋 Mensaje copiado') }
+
+  const abrirWhatsApp = (telefono) => {
+    const url = `https://wa.me/51${telefono.replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`
+    window.open(url, '_blank')
+  }
+
+  return (
+    <div>
+      <Hdr tit={tit} sec="📲 WhatsApp Marketing" onBack={() => setScr('submenu')} />
+      <div style={{ padding: 16 }}>
+        {/* Filtro clientes */}
+        <Crd title="1. Filtrar clientes">
+          <label style={{ fontSize: 11, color: G.muted }}>Género</label>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+            {['', 'Mujer', 'Hombre', 'Niño', 'Unisex'].map(g => (
+              <button key={g} onClick={() => setFiltroGenero(g)} style={{ flex: 1, padding: '6px 4px', borderRadius: 6, border: 'none', fontSize: 10, fontWeight: 600, cursor: 'pointer', background: filtroGenero === g ? G.gold : G.goldSf, color: filtroGenero === g ? '#fff' : G.goldDk }}>{g || 'Todos'}</button>
+            ))}
+          </div>
+          <label style={{ fontSize: 11, color: G.muted }}>Precio máx (S/)</label>
+          <input value={filtroPrecioMax} onChange={e => setFiltroPrecioMax(e.target.value)} type="number" placeholder="Sin límite" style={iS(G)} />
+          <p style={{ fontSize: 12, color: G.gold, fontWeight: 600, margin: 0 }}>📋 {clientesFiltrados.length} clientes con publicidad habilitada</p>
+        </Crd>
+
+        {/* Selección de productos */}
+        <Crd title={`2. Seleccionar productos (${selProds.length})`}>
+          <div style={{ maxHeight: 250, overflowY: 'auto' }}>
+            {prods.filter(p => p.cantidad > 0).map(p => (
+              <div key={p.id} onClick={() => toggleProd(p)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid ' + G.border, cursor: 'pointer', background: selProds.find(x => x.id === p.id) ? G.goldLt : 'transparent', borderRadius: 4, paddingLeft: 6 }}>
+                <span style={{ fontSize: 18 }}>{selProds.find(x => x.id === p.id) ? '✅' : '⬜'}</span>
+                {p.foto_url && <img src={p.foto_url} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} />}
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, margin: 0 }}>{p.nombre}</p>
+                  <p style={{ fontSize: 10, color: G.gold, margin: 0 }}>S/{p.precio_venta}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Crd>
+
+        {/* Generar mensaje */}
+        <button onClick={generarMensaje} disabled={!selProds.length}
+          style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', background: selProds.length ? G.gold : '#ccc', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>
+          💬 Generar mensaje WhatsApp
+        </button>
+
+        {mensaje && (
+          <Crd title="3. Enviar">
+            <textarea value={mensaje} onChange={e => setMensaje(e.target.value)} rows={8} style={{ ...iS(G), fontSize: 12, fontFamily: 'monospace' }} />
+            <button onClick={copiarMensaje} style={{ width: '100%', padding: 10, borderRadius: 8, border: 'none', background: '#2563EB', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginBottom: 8 }}>📋 Copiar mensaje</button>
+            <p style={{ fontSize: 11, color: G.muted, margin: '0 0 8px' }}>Enviar a clientes filtrados:</p>
+            <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+              {clientesFiltrados.filter(c => c.telefono).map(c => (
+                <button key={c.id} onClick={() => abrirWhatsApp(c.telefono)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: 'none', background: '#25D366', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginBottom: 4, textAlign: 'left' }}>
+                  💬 {c.nombre} — {c.telefono}
+                </button>
+              ))}
+              {clientesFiltrados.filter(c => !c.telefono).length > 0 && (
+                <p style={{ fontSize: 10, color: G.muted }}>{clientesFiltrados.filter(c => !c.telefono).length} clientes sin teléfono registrado</p>
+              )}
+            </div>
+          </Crd>
+        )}
       </div>
     </div>
   )
