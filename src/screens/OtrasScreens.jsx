@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../supabase'
 import { G, iS } from '../constants'
 import { exportCSV } from '../helpers'
@@ -943,7 +944,7 @@ export function ConciliacionScr(P) {
     const file = e.target.files?.[0]; if (!file) return
     setCargando(true)
     try {
-      const { default: XLSX } = await import('xlsx')
+      // XLSX ya importado estáticamente al inicio
       const buf = await file.arrayBuffer()
       const wb = XLSX.read(buf, { type: 'buffer' })
       const ws = wb.Sheets[wb.SheetNames[0]]
