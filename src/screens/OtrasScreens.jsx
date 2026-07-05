@@ -345,7 +345,7 @@ export function OrigenesScr(P) {
   }
 
   const editar = o => {
-    setEditId(o.id); setF({ nombre: o.nombre || '', cantidad: String(o.cantidad || ''), precio_costo_defecto: String(o.precio_costo_defecto || ''), precio_venta_defecto: String(o.precio_venta_defecto || ''), fecha: o.fecha || '', observaciones: o.observaciones || '', es_granel: o.es_granel || false, unidad_base: o.unidad_base || 'kg' })
+    setEditId(o.id); setF({ nombre: o.nombre || '', cantidad: String(o.cantidad || ''), precio_costo_defecto: o.precio_costo_defecto != null ? String(o.precio_costo_defecto) : '', precio_venta_defecto: o.precio_venta_defecto != null ? String(o.precio_venta_defecto) : '', fecha: o.fecha || '', observaciones: o.observaciones || '', es_granel: o.es_granel || false, unidad_base: o.unidad_base || 'kg' })
     setShowAdd(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
