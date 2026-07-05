@@ -279,7 +279,7 @@ function OrigenDetalle({ origen, eid, onClose }) {
 export function OrigenesScr(P) {
   const { eid, lid, tit, oris, notify, loadAll, setScr } = P
   const [showAdd, setShowAdd] = useState(false)
-  const [f, setF] = useState({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '' })
+  const [f, setF] = useState({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg' })
   const [editId, setEditId] = useState(null)
   const [detalleOrigen, setDetalleOrigen] = useState(null)
   const [usados, setUsados] = useState({})
@@ -298,14 +298,14 @@ export function OrigenesScr(P) {
 
   const guardar = async () => {
     if (!f.nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
-    const data = { empresa_id: eid, linea_id: lid, nombre: f.nombre.trim(), cantidad: parseInt(f.cantidad) || 0, precio_costo_defecto: parseFloat(f.precio_costo_defecto) || null, precio_venta_defecto: parseFloat(f.precio_venta_defecto) || null, fecha: f.fecha || null, observaciones: f.observaciones || null }
+    const data = { empresa_id: eid, linea_id: lid, nombre: f.nombre.trim(), cantidad: parseInt(f.cantidad) || 0, precio_costo_defecto: parseFloat(f.precio_costo_defecto) || null, precio_venta_defecto: parseFloat(f.precio_venta_defecto) || null, fecha: f.fecha || null, observaciones: f.observaciones || null, es_granel: f.es_granel, unidad_base: f.es_granel ? (f.unidad_base || 'kg') : null, stock_granel: f.es_granel ? (parseFloat(f.cantidad) || 0) : null }
     if (editId) { await supabase.from('origenes').update(data).eq('id', editId); notify('Actualizado') }
     else { await supabase.from('origenes').insert({ ...data, estado: 'activo' }); notify('Agregado') }
-    setShowAdd(false); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '' }); await loadAll()
+    setShowAdd(false); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg' }); await loadAll()
   }
 
   const editar = o => {
-    setEditId(o.id); setF({ nombre: o.nombre || '', cantidad: String(o.cantidad || ''), precio_costo_defecto: String(o.precio_costo_defecto || ''), precio_venta_defecto: String(o.precio_venta_defecto || ''), fecha: o.fecha || '', observaciones: o.observaciones || '' })
+    setEditId(o.id); setF({ nombre: o.nombre || '', cantidad: String(o.cantidad || ''), precio_costo_defecto: String(o.precio_costo_defecto || ''), precio_venta_defecto: String(o.precio_venta_defecto || ''), fecha: o.fecha || '', observaciones: o.observaciones || '', es_granel: o.es_granel || false, unidad_base: o.unidad_base || 'kg' })
     setShowAdd(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
@@ -353,6 +353,30 @@ export function OrigenesScr(P) {
               {invCalc > 0 && (<div style={{ background: G.goldLt, borderRadius: 8, padding: 10, marginBottom: 8, textAlign: 'center' }}><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>Inversión calculada</p><p style={{ fontSize: 18, fontWeight: 800, color: G.gold, margin: 0 }}>S/ {invCalc.toFixed(2)}</p><p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{f.cantidad} items × S/{f.precio_costo_defecto}</p></div>)}
               <label style={{ fontSize: 11, color: G.muted }}>Observaciones</label>
               <textarea value={f.observaciones} onChange={e => s('observaciones', e.target.value)} rows={2} style={{ ...iS(G), resize: 'vertical' }} />
+              {/* Control Granel */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: G.text, padding: '10px 12px', background: f.es_granel ? '#FFF8E7' : G.goldLt, borderRadius: 8, marginBottom: 8, border: f.es_granel ? '1px solid #F5A623' : '1px solid ' + G.border }}>
+                <input type="checkbox" checked={f.es_granel} onChange={e => s('es_granel', e.target.checked)} style={{ width: 16, height: 16, accentColor: '#F5A623', cursor: 'pointer' }} />
+                <div>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 13 }}>🌾 Control Granel</p>
+                  <p style={{ margin: 0, fontSize: 10, color: G.muted }}>El stock se descuenta por unidad base (kg, litros, etc.)</p>
+                </div>
+              </label>
+              {f.es_granel && (
+                <div style={{ background: '#FFF8E7', borderRadius: 8, padding: '10px 12px', marginBottom: 8, border: '1px solid #F5A623' }}>
+                  <label style={{ fontSize: 11, color: '#B45309', fontWeight: 700 }}>UNIDAD BASE</label>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                    {['kg', 'g', 'litros', 'ml', 'metros', 'unidades'].map(u => (
+                      <button key={u} onClick={() => s('unidad_base', u)}
+                        style={{ padding: '6px 12px', borderRadius: 16, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: f.unidad_base === u ? '#F5A623' : '#fff', color: f.unidad_base === u ? '#fff' : '#B45309' }}>
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 10, color: '#B45309', margin: '8px 0 0' }}>
+                    El campo "Cantidad" arriba indica el stock total en {f.unidad_base}
+                  </p>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => { setShowAdd(false); setEditId(null) }} style={{ flex: 1, padding: 10, borderRadius: 8, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
                 <button onClick={guardar} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{editId ? 'Actualizar' : 'Guardar'}</button>
@@ -374,6 +398,7 @@ export function OrigenesScr(P) {
                       <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, fontWeight: 700, background: o.estado === 'cerrado' ? '#FEE2E2' : o.estado === 'observado' ? '#FEF3C7' : '#D1FAE5', color: o.estado === 'cerrado' ? G.err : o.estado === 'observado' ? '#92400E' : '#065F46' }}>
                         {o.estado === 'cerrado' ? '🔴 Cerrado' : o.estado === 'observado' ? '⚠️ Observado' : '🟢 Activo'}
                       </span>
+                      {o.es_granel && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, fontWeight: 700, background: '#FFF8E7', color: '#B45309' }}>🌾 Granel · {o.stock_granel ?? o.cantidad ?? 0}{o.unidad_base}</span>}
                     </div>
                     <p style={{ fontSize: 10, color: G.muted, margin: '3px 0 1px' }}>
                       {o.cantidad > 0 ? <span style={{ fontWeight: 600, color: pct >= 1 ? G.err : pct >= 0.8 ? G.warn : G.text }}>{usadosCount}/{o.cantidad} usados</span> : <span>{usadosCount} registrados</span>}
