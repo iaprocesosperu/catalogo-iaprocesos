@@ -195,6 +195,18 @@ function OrigenDetalle({ origen, eid, onClose }) {
             <p style={{ fontSize: 20, fontWeight: 800, color: G.gold, margin: '2px 0' }}>{totalItemsStock}<span style={{ fontSize: 10, color: G.muted }}>/{origen.cantidad || '∞'}</span></p>
             <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{prods.length} productos • {totalItemsVendidos} vendidos</p>
           </div>
+          {origen.es_granel && (
+            <div style={{ gridColumn: '1 / -1', background: '#FFF8E7', borderRadius: 10, padding: 12, border: '1px solid #F5A623' }}>
+              <p style={{ fontSize: 9, color: '#B45309', fontWeight: 700, margin: 0 }}>🌾 STOCK GRANEL DISPONIBLE</p>
+              <p style={{ fontSize: 24, fontWeight: 900, color: '#F5A623', margin: '2px 0' }}>
+                {origen.stock_granel ?? origen.cantidad ?? 0}
+                <span style={{ fontSize: 12, color: '#B45309', marginLeft: 4 }}>{origen.unidad_base || 'unidades'}</span>
+              </p>
+              <p style={{ fontSize: 9, color: '#B45309', margin: 0 }}>
+                de {origen.cantidad || 0} {origen.unidad_base || 'unidades'} totales
+              </p>
+            </div>
+          )}
           <div style={{ background: G.goldLt, borderRadius: 10, padding: 12, border: '1px solid ' + G.border }}>
             <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Fecha</p>
             <p style={{ fontSize: 13, fontWeight: 700, color: G.text, margin: '2px 0' }}>{origen.fecha || '—'}</p>

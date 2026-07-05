@@ -34,7 +34,14 @@ export default function VentaScreen(P) {
   const onYapeFile = e => { const f = e.target.files?.[0]; if (f) setFotoYape(f); if (e.target) e.target.value = '' }
 
   const vender = async () => {
-    if (cant > prod.cantidad) { notify('Stock insuficiente: ' + prod.cantidad + ' disponibles', 'error'); return }
+    if (prod.equivalente_granel && prod.origen_id) {
+      // validación granel: verificar stock del origen
+      const { data: origen } = await supabase.from('origenes').select('stock_granel').eq('id', prod.origen_id).single()
+      const disponible = origen?.stock_granel || 0
+      if (prod.equivalente_granel * cant > disponible) { notify(`Stock insuficiente: quedan ${disponible} unidades en el origen`, 'error'); return }
+    } else {
+      if (cant > prod.cantidad) { notify('Stock insuficiente: ' + prod.cantidad + ' disponibles', 'error'); return }
+    }
     if (cant <= 0) { notify('Cantidad inválida', 'error'); return }
     setSaving(true)
     try {
@@ -47,7 +54,14 @@ export default function VentaScreen(P) {
         cantidad: cant, total, metodo_pago: metodo, tipo_entrega: entrega, foto_yape: foto_yape_url, nota,
         estado: 'entregado'
       })
-      await supabase.from('productos').update({ cantidad: prod.cantidad - cant }).eq('id', prod.id)
+      // Descuento de stock: granel descuenta del origen, normal descuenta del producto
+      if (prod.equivalente_granel && prod.origen_id) {
+        const descuento = prod.equivalente_granel * cant
+        const { data: origen } = await supabase.from('origenes').select('stock_granel').eq('id', prod.origen_id).single()
+        if (origen) await supabase.from('origenes').update({ stock_granel: (origen.stock_granel || 0) - descuento }).eq('id', prod.origen_id)
+      } else {
+        await supabase.from('productos').update({ cantidad: prod.cantidad - cant }).eq('id', prod.id)
+      }
       notify('¡Venta registrada! S/' + total.toFixed(2)); await loadAll(); setScr('catalogo')
     } catch (e) { notify('Error: ' + e.message, 'error') }
     setSaving(false)

@@ -13,8 +13,8 @@ export default function RegistrarScreen(P) {
     codigo: ep.codigo || '', nombre: ep.nombre || '', precio_costo: String(ep.precio_costo || ''),
     precio_venta: String(ep.precio_venta || ''), color: ep.color || '', cantidad: String(ep.cantidad || 1),
     categoria_id: ep.categoria_id || '', origen_id: ep.origen_id || '', observacion: ep.observacion || '',
-    atributos: ep.atributos || {}, seccion_id: ep.seccion_id || ''
-  } : { codigo: '', nombre: '', precio_costo: '', precio_venta: '', color: '', cantidad: '1', categoria_id: '', origen_id: '', observacion: '', atributos: {}, seccion_id: '' })
+    atributos: ep.atributos || {}, seccion_id: ep.seccion_id || '', equivalente_granel: String(ep.equivalente_granel || '')
+  } : { codigo: '', nombre: '', precio_costo: '', precio_venta: '', color: '', cantidad: '1', categoria_id: '', origen_id: '', observacion: '', atributos: {}, seccion_id: '', equivalente_granel: '' })
 
   // ── FOTOS (múltiples) ──
   // Cada entrada: { id, url, es_principal, esNueva, file }
@@ -81,7 +81,7 @@ export default function RegistrarScreen(P) {
     if (linAct?.incluir_origen_nombre && origenAct?.nombre) pts.push(origenAct.nombre)
     pts.push(cat?.nombre || '')
     if (f.color) pts.push(f.color)
-    if (f.atributos) Object.values(f.atributos).forEach(v => { if (v && v !== 'Sin Género') pts.push(v) })
+    if (f.atributos) Object.values(f.atributos).forEach(v => { if (v) pts.push(v) })
     const a = pts.filter(Boolean).join(' '); if (a) s('nombre', a)
   }, [f.categoria_id, f.color, f.atributos, cats])
 
@@ -316,6 +316,7 @@ export default function RegistrarScreen(P) {
         codigo: f.codigo, nombre: f.nombre, precio_costo: parseFloat(f.precio_costo) || 0,
         precio_venta: parseFloat(f.precio_venta) || 0, cantidad: parseInt(f.cantidad) || 1,
         color: f.color, atributos: f.atributos, observacion: f.observacion, foto_url,
+        equivalente_granel: f.equivalente_granel ? parseFloat(f.equivalente_granel) : null,
         updated_at: new Date().toISOString()
       }
 
@@ -567,8 +568,28 @@ export default function RegistrarScreen(P) {
           </label>
           <select value={f.origen_id} onChange={e => onOrigenChange(e.target.value)} style={sE('origen_id')}>
             <option value="">Seleccionar origen</option>
-            {oris.map(o => <option key={o.id} value={o.id}>{o.nombre}{o.precio_venta_defecto ? ' (C:' + o.precio_costo_defecto + ' V:' + o.precio_venta_defecto + ')' : ''}</option>)}
+            {oris.map(o => <option key={o.id} value={o.id}>{o.nombre}{o.precio_venta_defecto ? ' (C:' + o.precio_costo_defecto + ' V:' + o.precio_venta_defecto + ')' : ''}{o.es_granel ? ' 🌾 GRANEL' : ''}</option>)}
           </select>
+
+          {/* Campo granel: solo aparece si el origen seleccionado es granel */}
+          {f.origen_id && oris.find(o => o.id === parseInt(f.origen_id))?.es_granel && (
+            <div style={{ background: '#FFF8E7', border: '1px solid #F5A623', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
+              <label style={{ fontSize: 11, color: '#B45309', fontWeight: 700 }}>🌾 CONTROL GRANEL — ¿Cuánto descuenta del stock del origen?</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                <input value={f.equivalente_granel} onChange={e => s('equivalente_granel', e.target.value)}
+                  type="number" placeholder="Ej: 25" min="0" step="0.1"
+                  style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #F5A623', fontSize: 15, fontWeight: 700, textAlign: 'center', background: '#fff' }} />
+                <span style={{ fontSize: 13, color: '#B45309', fontWeight: 600 }}>
+                  {oris.find(o => o.id === parseInt(f.origen_id))?.unidad_base || 'unidades'}
+                </span>
+              </div>
+              {f.equivalente_granel && (
+                <p style={{ fontSize: 11, color: '#B45309', margin: '4px 0 0' }}>
+                  Al vender 1 unidad de este producto se descontarán {f.equivalente_granel} {oris.find(o => o.id === parseInt(f.origen_id))?.unidad_base || 'unidades'} del origen
+                </p>
+              )}
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 2 }}>
             <label style={{ fontSize: 11, color: errFields.includes('categoria_id') ? G.err : G.muted, fontWeight: errFields.includes('categoria_id') ? 700 : 400 }}>
@@ -616,7 +637,7 @@ export default function RegistrarScreen(P) {
           {catSel && tallas.length > 0 && !attrsDef.find(a => a.key === 'genero') && (
             <><label style={{ fontSize: 11, color: G.muted }}>Género</label>
               <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                {['Mujer', 'Hombre', 'Unisex', 'Sin Género'].map(g => <button key={g} onClick={() => sA('genero', g)} style={{ flex: 1, padding: 7, borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: f.atributos?.genero === g ? G.gold : G.goldSf, color: f.atributos?.genero === g ? '#fff' : G.goldDk }}>{g}</button>)}
+                {['Mujer', 'Hombre', 'Unisex'].map(g => <button key={g} onClick={() => sA('genero', g)} style={{ flex: 1, padding: 7, borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: f.atributos?.genero === g ? G.gold : G.goldSf, color: f.atributos?.genero === g ? '#fff' : G.goldDk }}>{g}</button>)}
               </div></>
           )}
 
