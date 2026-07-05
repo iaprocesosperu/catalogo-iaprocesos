@@ -9,18 +9,17 @@ import VentaScreen from './screens/VentaScreen'
 import { SubMenu, OrigenesScr, CatsScr, MantScr, ClientesScr, StockScr, HistorialScr, ListasTallasScr, SeccionesScr, PedidosScr, InventarioScr, ConciliacionScr, MarketingScr, PromoCreatorScr } from './screens/OtrasScreens'
 import PublicProductPage from './screens/PublicProductPage'
 import PublicCatalogPage from './screens/PublicCatalogPage'
+import PaginaWebScr from './screens/PaginaWebScr'
 import PromoPage from './screens/PromoPage'
 
-/* ═══ DETECCIÓN DE DISPOSITIVO ═══ */
+/* ═══ DETECCIÓN ═══ */
 const getIsMobile = () => window.innerWidth <= 768
 
-/* ═══ DETECCIÓN DE SUBDOMINIO PÚBLICO ═══ */
 const SUBDOMINIOS_PUBLICOS = ['lacasita', 'amychic', 'elmiau']
 const getSubdominio = () => {
-  const hostname = window.location.hostname  // ej: lacasita.iaprocesos.com.pe
-  const sub = hostname.split('.')[0]
-  // En desarrollo local no aplicar
+  const hostname = window.location.hostname
   if (hostname === 'localhost' || hostname === '127.0.0.1') return null
+  const sub = hostname.split('.')[0]
   return SUBDOMINIOS_PUBLICOS.includes(sub) ? sub : null
 }
 
@@ -31,7 +30,7 @@ function AccessScreen({ login, loading }) {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#1A1A1A,#2D2D2D)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ fontSize: 48, marginBottom: 8 }}>🔑</div>
       <h1 style={{ color: G.gold, fontSize: 26, fontWeight: 800, margin: '0 0 4px' }}>IA <span style={{ color: '#E8E8E8' }}>PROCESOS</span></h1>
-      <p style={{ color: '#999', fontSize: 13, marginBottom: 32 }}>Ingresa tu clave de acceso</p>
+      <p style={{ color: '#999', fontSize: 13, marginBottom: 32 }}>Acceso Intranet</p>
       <input value={k} onChange={e => setK(e.target.value.toUpperCase())} placeholder="CLAVE"
         style={{ width: '100%', maxWidth: 300, padding: 14, borderRadius: 10, border: '2px solid ' + G.gold, background: '#333', color: '#fff', fontSize: 18, fontWeight: 700, textAlign: 'center', letterSpacing: 3, boxSizing: 'border-box' }} />
       <button onClick={() => k && login(k)} disabled={!k || loading}
@@ -62,8 +61,9 @@ export default function App() {
   const [editP, setEditP] = useState(null)
   const [ventaP, setVentaP] = useState(null)
   const [isMobile, setIsMobile] = useState(getIsMobile())
+  // Modo público: muestra catálogo público, false = muestra intranet
+  const [modoPublico, setModoPublico] = useState(!!getSubdominio())
 
-  /* Detectar cambio de tamaño de ventana */
   useEffect(() => {
     const handleResize = () => setIsMobile(getIsMobile())
     window.addEventListener('resize', handleResize)
@@ -84,7 +84,12 @@ export default function App() {
     if (params.get('share') === 'true') { setScr('registrar') }
   }, [])
 
-  useEffect(() => { const k = localStorage.getItem('ia_key'); if (k) loginKey(k) }, [])
+  useEffect(() => {
+    // Solo auto-login si no estamos en modo público
+    if (!modoPublico) {
+      const k = localStorage.getItem('ia_key'); if (k) loginKey(k)
+    }
+  }, [modoPublico])
 
   const loginKey = async (k) => {
     setLoading(true)
@@ -93,7 +98,7 @@ export default function App() {
     else { notify('Clave inválida', 'error'); localStorage.removeItem('ia_key') }
     setLoading(false)
   }
-  const logout = () => { localStorage.removeItem('ia_key'); setEmp(null); setScr('access') }
+  const logout = () => { localStorage.removeItem('ia_key'); setEmp(null); setScr('access'); setModoPublico(!!getSubdominio()) }
 
   const loadAll = async (eid) => {
     const id = eid || emp?.id; if (!id) return
@@ -122,76 +127,78 @@ export default function App() {
   const cF = cats.filter(c => c.linea_id === lid), oF = oris.filter(o => o.linea_id === lid), pF = prods.filter(p => p.linea_id === lid)
   const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, cols, prods: pF, allProds: prods, clis, vents, listaTallas, secciones, pedidos, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G, isMobile }
 
-  // ── Páginas públicas por URL ──
+  // Rutas públicas por URL
   if (window.location.pathname.startsWith('/comprar/')) return <PublicProductPage />
   if (window.location.pathname.startsWith('/promo/')) return <PromoPage />
 
-  // ── Catálogo público por subdominio ──
-  if (getSubdominio()) return <PublicCatalogPage />
+  // Modo público: catálogo de la tienda
+  if (modoPublico) return <PublicCatalogPage onIntranet={() => setModoPublico(false)} />
 
-  /* ── DESKTOP: layout con sidebar lateral ── */
+  /* ── INTRANET DESKTOP ── */
   if (!isMobile && emp && scr !== 'access') {
     return (
       <div style={{ display: 'flex', minHeight: '100vh', background: '#F5F5F5' }}>
         <NavBar scr={scr} setScr={setScr} setEditP={setEditP} isMobile={false} />
-        <div style={{ flex: 1, marginLeft: 200, minHeight: '100vh', background: G.bg, overflowY: 'auto' }}>
+        <div style={{ flex: 1, marginLeft: 210, minHeight: '100vh', background: G.bg, overflowY: 'auto' }}>
           {notif && (
             <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10000, background: notif.t === 'success' ? G.ok : G.err, color: '#fff', padding: '10px 20px', borderRadius: 12, fontSize: 14, fontWeight: 600, boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
               {notif.m}
             </div>
           )}
-          {scr === 'catalogo' && <CatalogoScreen {...P} />}
-          {scr === 'registrar' && <RegistrarScreen {...P} editP={editP} />}
-          {scr === 'buscar' && <BuscarScreen {...P} />}
-          {scr === 'venta' && <VentaScreen {...P} prod={ventaP} />}
-          {scr === 'submenu' && <SubMenu {...P} />}
-          {scr === 'lineas' && <MantScr tipo="lineas" data={lineas} {...P} />}
-          {scr === 'categorias' && <CatsScr {...P} />}
-          {scr === 'origenes' && <OrigenesScr {...P} />}
-          {scr === 'colores' && <MantScr tipo="colores" data={cols} {...P} />}
-          {scr === 'clientes' && <ClientesScr {...P} />}
-          {scr === 'stock' && <StockScr {...P} />}
-          {scr === 'historial' && <HistorialScr {...P} />}
+          {scr === 'catalogo'    && <CatalogoScreen {...P} />}
+          {scr === 'registrar'   && <RegistrarScreen {...P} editP={editP} />}
+          {scr === 'buscar'      && <BuscarScreen {...P} />}
+          {scr === 'venta'       && <VentaScreen {...P} prod={ventaP} />}
+          {scr === 'submenu'     && <SubMenu {...P} />}
+          {scr === 'lineas'      && <MantScr tipo="lineas" data={lineas} {...P} />}
+          {scr === 'categorias'  && <CatsScr {...P} />}
+          {scr === 'origenes'    && <OrigenesScr {...P} />}
+          {scr === 'colores'     && <MantScr tipo="colores" data={cols} {...P} />}
+          {scr === 'clientes'    && <ClientesScr {...P} />}
+          {scr === 'stock'       && <StockScr {...P} />}
+          {scr === 'historial'   && <HistorialScr {...P} />}
           {scr === 'listaTallas' && <ListasTallasScr {...P} />}
-          {scr === 'secciones' && <SeccionesScr {...P} />}
-          {scr === 'pedidos' && <PedidosScr {...P} />}
-          {scr === 'inventario' && <InventarioScr {...P} />}
-          {scr === 'conciliacion' && <ConciliacionScr {...P} />}
-          {scr === 'marketing' && <MarketingScr {...P} />}
-          {scr === 'promos' && <PromoCreatorScr {...P} />}
+          {scr === 'secciones'   && <SeccionesScr {...P} />}
+          {scr === 'pedidos'     && <PedidosScr {...P} />}
+          {scr === 'inventario'  && <InventarioScr {...P} />}
+          {scr === 'conciliacion'&& <ConciliacionScr {...P} />}
+          {scr === 'marketing'   && <MarketingScr {...P} />}
+          {scr === 'promos'      && <PromoCreatorScr {...P} />}
+          {scr === 'paginaweb'   && <PaginaWebScr emp={emp} notify={notify} />}
         </div>
       </div>
     )
   }
 
-  /* ── MOBILE: layout original ── */
+  /* ── INTRANET MOBILE ── */
   return (
-    <div style={{ maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: G.bg, position: 'relative', paddingBottom: 68 }}>
+    <div style={{ maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: G.bg, position: 'relative', paddingBottom: 80 }}>
       {notif && (
         <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10000, background: notif.t === 'success' ? G.ok : G.err, color: '#fff', padding: '10px 20px', borderRadius: 12, fontSize: 14, fontWeight: 600, boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
           {notif.m}
         </div>
       )}
-      {scr === 'access' && <AccessScreen login={loginKey} loading={loading} />}
-      {scr === 'catalogo' && <CatalogoScreen {...P} />}
-      {scr === 'registrar' && <RegistrarScreen {...P} editP={editP} />}
-      {scr === 'buscar' && <BuscarScreen {...P} />}
-      {scr === 'venta' && <VentaScreen {...P} prod={ventaP} />}
-      {scr === 'submenu' && <SubMenu {...P} />}
-      {scr === 'lineas' && <MantScr tipo="lineas" data={lineas} {...P} />}
-      {scr === 'categorias' && <CatsScr {...P} />}
-      {scr === 'origenes' && <OrigenesScr {...P} />}
-      {scr === 'colores' && <MantScr tipo="colores" data={cols} {...P} />}
-      {scr === 'clientes' && <ClientesScr {...P} />}
-      {scr === 'stock' && <StockScr {...P} />}
-      {scr === 'historial' && <HistorialScr {...P} />}
+      {scr === 'access'      && <AccessScreen login={loginKey} loading={loading} />}
+      {scr === 'catalogo'    && <CatalogoScreen {...P} />}
+      {scr === 'registrar'   && <RegistrarScreen {...P} editP={editP} />}
+      {scr === 'buscar'      && <BuscarScreen {...P} />}
+      {scr === 'venta'       && <VentaScreen {...P} prod={ventaP} />}
+      {scr === 'submenu'     && <SubMenu {...P} />}
+      {scr === 'lineas'      && <MantScr tipo="lineas" data={lineas} {...P} />}
+      {scr === 'categorias'  && <CatsScr {...P} />}
+      {scr === 'origenes'    && <OrigenesScr {...P} />}
+      {scr === 'colores'     && <MantScr tipo="colores" data={cols} {...P} />}
+      {scr === 'clientes'    && <ClientesScr {...P} />}
+      {scr === 'stock'       && <StockScr {...P} />}
+      {scr === 'historial'   && <HistorialScr {...P} />}
       {scr === 'listaTallas' && <ListasTallasScr {...P} />}
-      {scr === 'secciones' && <SeccionesScr {...P} />}
-      {scr === 'pedidos' && <PedidosScr {...P} />}
-      {scr === 'inventario' && <InventarioScr {...P} />}
-      {scr === 'conciliacion' && <ConciliacionScr {...P} />}
-      {scr === 'marketing' && <MarketingScr {...P} />}
-      {scr === 'promos' && <PromoCreatorScr {...P} />}
+      {scr === 'secciones'   && <SeccionesScr {...P} />}
+      {scr === 'pedidos'     && <PedidosScr {...P} />}
+      {scr === 'inventario'  && <InventarioScr {...P} />}
+      {scr === 'conciliacion'&& <ConciliacionScr {...P} />}
+      {scr === 'marketing'   && <MarketingScr {...P} />}
+      {scr === 'promos'      && <PromoCreatorScr {...P} />}
+      {scr === 'paginaweb'   && <PaginaWebScr emp={emp} notify={notify} />}
       {emp && scr !== 'access' && <NavBar scr={scr} setScr={setScr} setEditP={setEditP} isMobile={true} />}
     </div>
   )
