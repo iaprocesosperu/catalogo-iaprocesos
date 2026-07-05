@@ -76,31 +76,38 @@ export function NavBar({ scr, setScr, setEditP, isMobile }) {
     )
   }
 
-  /* ── MOBILE: barra inferior con toggle APP / WEB ── */
-  const items = isWebScr ? webItems : appItems
+  /* ── MOBILE: doble fila de botones ── */
+  const fila1 = [
+    { id: 'catalogo',  i: '📦', l: 'Catálogo' },
+    { id: 'registrar', i: '➕', l: 'Registrar' },
+    { id: 'buscar',    i: '🔍', l: 'Buscar' },
+  ]
+  const fila2 = [
+    { id: 'historial', i: '💰', l: 'Ventas' },
+    { id: 'pedidos',   i: '🛒', l: 'Pedidos' },
+    { id: 'submenu',   i: '⚙️', l: 'Más' },
+    { id: 'paginaweb', i: '🌐', l: 'Web' },
+  ]
+
+  const btnStyle = () => ({
+    background: 'none', border: 'none', cursor: 'pointer',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+    padding: '3px 8px', flex: 1
+  })
 
   return (
     <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, background: '#fff', borderTop: '2px solid ' + G.goldSf, zIndex: 100 }}>
-      {/* Toggle APP / PÁGINA WEB */}
-      <div style={{ display: 'flex', borderBottom: '1px solid ' + G.goldSf }}>
-        <button onClick={() => setScr('catalogo')}
-          style={{ flex: 1, padding: '5px 0', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700,
-            background: !isWebScr ? G.gold : 'transparent',
-            color: !isWebScr ? '#fff' : G.muted }}>
-          📦 APP
-        </button>
-        <button onClick={() => setScr('paginaweb')}
-          style={{ flex: 1, padding: '5px 0', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700,
-            background: isWebScr ? G.gold : 'transparent',
-            color: isWebScr ? '#fff' : G.muted }}>
-          🌐 PÁGINA WEB
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-around', borderBottom: '1px solid ' + G.goldSf, padding: '4px 0' }}>
+        {fila1.map(n => (
+          <button key={n.id} onClick={() => { setScr(n.id); if (n.id === 'registrar') setEditP(null) }} style={btnStyle()}>
+            <span style={{ fontSize: 18 }}>{n.i}</span>
+            <span style={{ fontSize: 9, color: scr === n.id ? G.gold : G.muted, fontWeight: scr === n.id ? 700 : 400 }}>{n.l}</span>
+          </button>
+        ))}
       </div>
-      {/* Items de la sección activa */}
       <div style={{ display: 'flex', justifyContent: 'space-around', padding: '4px 0 env(safe-area-inset-bottom,4px)' }}>
-        {items.map(n => (
-          <button key={n.id} onClick={() => { setScr(n.id); if (n.id === 'registrar') setEditP(null) }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '4px 12px' }}>
+        {fila2.map(n => (
+          <button key={n.id} onClick={() => setScr(n.id)} style={btnStyle()}>
             <span style={{ fontSize: 18 }}>{n.i}</span>
             <span style={{ fontSize: 9, color: scr === n.id ? G.gold : G.muted, fontWeight: scr === n.id ? 700 : 400 }}>{n.l}</span>
           </button>
