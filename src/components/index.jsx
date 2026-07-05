@@ -3,40 +3,72 @@ import { G } from '../constants'
 import { startVoice } from '../helpers'
 
 export function NavBar({ scr, setScr, setEditP, isMobile }) {
-  const items = [
-    { id: 'catalogo',   i: '📦', l: 'Catálogo' },
-    { id: 'registrar',  i: '➕', l: 'Registrar' },
-    { id: 'buscar',     i: '🔍', l: 'Buscar' },
-    { id: 'submenu',    i: '⚙️', l: 'Más' }
+  const appItems = [
+    { id: 'catalogo',  i: '📦', l: 'Catálogo' },
+    { id: 'registrar', i: '➕', l: 'Registrar' },
+    { id: 'buscar',    i: '🔍', l: 'Buscar' },
+    { id: 'submenu',   i: '⚙️', l: 'Más' }
   ]
 
-  /* ── DESKTOP: sidebar vertical fija ── */
+  const webItems = [
+    { id: 'paginaweb', i: '🌐', l: 'Página Web' }
+  ]
+
+  const allWebIds = ['paginaweb']
+  const isWebScr = allWebIds.includes(scr)
+
+  /* ── DESKTOP: sidebar con dos secciones ── */
   if (!isMobile) {
     return (
       <div style={{
-        position: 'fixed', top: 0, left: 0, width: 200, height: '100vh',
+        position: 'fixed', top: 0, left: 0, width: 210, height: '100vh',
         background: '#1A1A1A', borderRight: '2px solid ' + G.gold,
-        display: 'flex', flexDirection: 'column', zIndex: 100, paddingTop: 24
+        display: 'flex', flexDirection: 'column', zIndex: 100, paddingTop: 20
       }}>
         {/* Logo */}
-        <div style={{ padding: '0 20px 24px', borderBottom: '1px solid #333' }}>
-          <p style={{ color: G.gold, fontSize: 18, fontWeight: 800, margin: 0 }}>IA <span style={{ color: '#E8E8E8' }}>PROCESOS</span></p>
+        <div style={{ padding: '0 20px 20px', borderBottom: '1px solid #2A2A2A' }}>
+          <p style={{ color: G.gold, fontSize: 17, fontWeight: 800, margin: 0 }}>IA <span style={{ color: '#E8E8E8' }}>PROCESOS</span></p>
         </div>
-        {/* Items */}
-        <div style={{ flex: 1, paddingTop: 16 }}>
-          {items.map(n => (
+
+        {/* Sección APP */}
+        <div style={{ paddingTop: 12 }}>
+          <p style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, padding: '0 20px', margin: '0 0 4px', textTransform: 'uppercase' }}>APP</p>
+          {appItems.map(n => (
             <button key={n.id}
               onClick={() => { setScr(n.id); if (n.id === 'registrar') setEditP(null) }}
               style={{
                 width: '100%', background: scr === n.id ? G.gold : 'transparent',
                 border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 12,
-                padding: '14px 20px', textAlign: 'left',
+                padding: '12px 20px', textAlign: 'left',
                 borderLeft: scr === n.id ? '4px solid #fff' : '4px solid transparent',
                 transition: 'background 0.15s'
               }}>
-              <span style={{ fontSize: 20 }}>{n.i}</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: scr === n.id ? '#1A1A1A' : '#CCC' }}>{n.l}</span>
+              <span style={{ fontSize: 18 }}>{n.i}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: scr === n.id ? '#1A1A1A' : '#CCC' }}>{n.l}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Separador */}
+        <div style={{ margin: '12px 20px', borderTop: '1px solid #2A2A2A' }} />
+
+        {/* Sección PÁGINA WEB */}
+        <div>
+          <p style={{ fontSize: 9, fontWeight: 700, color: '#555', letterSpacing: 2, padding: '0 20px', margin: '0 0 4px', textTransform: 'uppercase' }}>PÁGINA WEB</p>
+          {webItems.map(n => (
+            <button key={n.id}
+              onClick={() => setScr(n.id)}
+              style={{
+                width: '100%', background: scr === n.id ? G.gold : 'transparent',
+                border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 20px', textAlign: 'left',
+                borderLeft: scr === n.id ? '4px solid #fff' : '4px solid transparent',
+                transition: 'background 0.15s'
+              }}>
+              <span style={{ fontSize: 18 }}>{n.i}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: scr === n.id ? '#1A1A1A' : '#CCC' }}>{n.l}</span>
             </button>
           ))}
         </div>
@@ -44,16 +76,36 @@ export function NavBar({ scr, setScr, setEditP, isMobile }) {
     )
   }
 
-  /* ── MOBILE: barra inferior original ── */
+  /* ── MOBILE: barra inferior con toggle APP / WEB ── */
+  const items = isWebScr ? webItems : appItems
+
   return (
-    <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, background: '#fff', borderTop: '2px solid ' + G.goldSf, padding: '6px 0 env(safe-area-inset-bottom,6px)', display: 'flex', justifyContent: 'space-around', zIndex: 100 }}>
-      {items.map(n => (
-        <button key={n.id} onClick={() => { setScr(n.id); if (n.id === 'registrar') setEditP(null) }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '4px 8px' }}>
-          <span style={{ fontSize: 18 }}>{n.i}</span>
-          <span style={{ fontSize: 9, color: scr === n.id ? G.gold : G.muted, fontWeight: scr === n.id ? 700 : 400 }}>{n.l}</span>
+    <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, background: '#fff', borderTop: '2px solid ' + G.goldSf, zIndex: 100 }}>
+      {/* Toggle APP / PÁGINA WEB */}
+      <div style={{ display: 'flex', borderBottom: '1px solid ' + G.goldSf }}>
+        <button onClick={() => setScr('catalogo')}
+          style={{ flex: 1, padding: '5px 0', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700,
+            background: !isWebScr ? G.gold : 'transparent',
+            color: !isWebScr ? '#fff' : G.muted }}>
+          📦 APP
         </button>
-      ))}
+        <button onClick={() => setScr('paginaweb')}
+          style={{ flex: 1, padding: '5px 0', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700,
+            background: isWebScr ? G.gold : 'transparent',
+            color: isWebScr ? '#fff' : G.muted }}>
+          🌐 PÁGINA WEB
+        </button>
+      </div>
+      {/* Items de la sección activa */}
+      <div style={{ display: 'flex', justifyContent: 'space-around', padding: '4px 0 env(safe-area-inset-bottom,4px)' }}>
+        {items.map(n => (
+          <button key={n.id} onClick={() => { setScr(n.id); if (n.id === 'registrar') setEditP(null) }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '4px 12px' }}>
+            <span style={{ fontSize: 18 }}>{n.i}</span>
+            <span style={{ fontSize: 9, color: scr === n.id ? G.gold : G.muted, fontWeight: scr === n.id ? 700 : 400 }}>{n.l}</span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
