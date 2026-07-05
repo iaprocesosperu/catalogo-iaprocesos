@@ -147,6 +147,34 @@ function OrigenDetalle({ origen, eid, onClose }) {
   const [prods, setProds] = useState([])
   const [ventas, setVentas] = useState([])
   const [cargando, setCargando] = useState(true)
+  const [recalculando, setRecalculando] = useState(false)
+
+  const recalcularCostos = async () => {
+    if (!origen.precio_costo_defecto) { alert('Este origen no tiene precio costo definido'); return }
+    if (!confirm(`¿Recalcular todos los productos y ventas de "${origen.nombre}" con costo S/${origen.precio_costo_defecto}?`)) return
+    setRecalculando(true)
+    try {
+      const prodIds = prods.map(p => p.id)
+      // Actualizar precio_costo en productos
+      if (prodIds.length > 0) {
+        await supabase.from('productos').update({ precio_costo: origen.precio_costo_defecto }).in('id', prodIds)
+      }
+      // Actualizar precio_costo en ventas de esos productos
+      if (prodIds.length > 0) {
+        await supabase.from('ventas').update({ precio_costo: origen.precio_costo_defecto }).in('producto_id', prodIds)
+      }
+      alert('✅ Costos actualizados correctamente')
+      // Recargar
+      const [{ data: ps }, { data: vs }] = await Promise.all([
+        supabase.from('productos').select('*,categorias(nombre)').eq('empresa_id', eid).eq('origen_id', origen.id).eq('activo', true).order('codigo'),
+        supabase.from('ventas').select('*').eq('empresa_id', eid)
+      ])
+      const newProds = ps || []
+      const prodIdsSet = new Set(newProds.map(p => p.id))
+      setProds(newProds); setVentas((vs || []).filter(v => prodIdsSet.has(v.producto_id)))
+    } catch(e) { alert('Error: ' + e.message) }
+    setRecalculando(false)
+  }
 
   useEffect(() => {
     const cargar = async () => {
@@ -231,6 +259,18 @@ function OrigenDetalle({ origen, eid, onClose }) {
               <div><p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Ganancia real</p><p style={{ fontSize: 16, fontWeight: 800, color: G.ok, margin: 0 }}>+S/{gananciaReal.toFixed(0)}</p></div>
               <div><p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Pendiente</p><p style={{ fontSize: 16, fontWeight: 800, color: G.gold, margin: 0 }}>S/{ventaEsperada.toFixed(0)}</p></div>
             </div>
+          </div>
+        )}
+        {origen.precio_costo_defecto > 0 && (
+          <div style={{ background: '#FFF8E7', border: '1px solid #F5A623', borderRadius: 10, padding: '12px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#B45309', margin: 0 }}>🔄 Recalcular costos</p>
+              <p style={{ fontSize: 10, color: '#B45309', margin: '2px 0 0' }}>Aplicar S/{origen.precio_costo_defecto} a todos los productos y ventas</p>
+            </div>
+            <button onClick={recalcularCostos} disabled={recalculando}
+              style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: recalculando ? '#ccc' : '#F5A623', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {recalculando ? '⏳...' : '🔄 Aplicar'}
+            </button>
           </div>
         )}
         <p style={{ fontSize: 12, fontWeight: 700, color: G.text, margin: '0 0 8px' }}>Productos de este origen</p>
@@ -703,23 +743,99 @@ export function StockScr(P) {
 
 /* ═══ HISTORIAL VENTAS ═══ */
 export function HistorialScr(P) {
-  const { tit, vents, setScr, notify } = P
-  const tV = vents.reduce((s, v) => s + v.total, 0)
-  const tG = vents.reduce((s, v) => s + (v.precio_venta_real - v.precio_costo) * v.cantidad, 0)
-  const exp = () => { exportCSV(vents, 'ventas_' + new Date().toISOString().split('T')[0], [{ k: r => new Date(r.created_at).toLocaleDateString('es-PE'), l: 'Fecha' }, { k: r => new Date(r.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }), l: 'Hora' }, { k: 'codigo_producto', l: 'Código' }, { k: 'nombre_producto', l: 'Producto' }, { k: 'cantidad', l: 'Cant' }, { k: 'precio_costo', l: 'P.Costo' }, { k: 'precio_venta_original', l: 'P.Venta Orig' }, { k: 'precio_venta_real', l: 'P.Venta Real' }, { k: 'total', l: 'Total' }, { k: 'metodo_pago', l: 'Pago' }, { k: 'tipo_entrega', l: 'Entrega' }, { k: r => r.clientes?.nombre || '', l: 'Cliente' }]); notify('Exportado') }
+  const { tit, vents, lid, setScr, notify } = P
+  const [tab, setTab] = useState('lista')
+  const [desde, setDesde] = useState('')
+  const [hasta, setHasta] = useState('')
+
+  const ventasLinea = vents.filter(v => v.linea_id ? v.linea_id === lid : true)
+  const fl = ventasLinea.filter(v => {
+    if (desde && new Date(v.created_at) < new Date(desde)) return false
+    if (hasta && new Date(v.created_at) > new Date(hasta + 'T23:59:59')) return false
+    return true
+  }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+  const tV = fl.reduce((s, v) => s + v.total, 0)
+  const tG = fl.reduce((s, v) => s + (v.precio_venta_real - v.precio_costo) * v.cantidad, 0)
+
+  const exp = () => {
+    exportCSV(fl, 'ventas_' + new Date().toISOString().split('T')[0], [
+      { k: r => new Date(r.created_at).toLocaleDateString('es-PE'), l: 'Fecha' },
+      { k: r => new Date(r.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }), l: 'Hora' },
+      { k: 'codigo_producto', l: 'Código' }, { k: 'nombre_producto', l: 'Producto' },
+      { k: 'cantidad', l: 'Cant' }, { k: 'precio_costo', l: 'P.Costo' },
+      { k: 'precio_venta_original', l: 'P.Venta Orig' }, { k: 'precio_venta_real', l: 'P.Venta Real' },
+      { k: 'total', l: 'Total' }, { k: r => ((r.precio_venta_real - r.precio_costo) * r.cantidad).toFixed(2), l: 'Ganancia' },
+      { k: 'metodo_pago', l: 'Pago' }, { k: 'tipo_entrega', l: 'Entrega' },
+      { k: r => r.clientes?.nombre || '', l: 'Cliente' }
+    ]); notify('Exportado')
+  }
+
+  const porProducto = Object.values(fl.reduce((acc, v) => {
+    const k = v.nombre_producto
+    if (!acc[k]) acc[k] = { nombre: k, cant: 0, total: 0 }
+    acc[k].cant += v.cantidad; acc[k].total += v.total; return acc
+  }, {})).sort((a, b) => b.cant - a.cant).slice(0, 10)
+
+  const porDia = Object.values(fl.reduce((acc, v) => {
+    const d = new Date(v.created_at).toLocaleDateString('es-PE', { weekday: 'long' })
+    if (!acc[d]) acc[d] = { dia: d, cant: 0, total: 0 }
+    acc[d].cant += v.cantidad; acc[d].total += v.total; return acc
+  }, {})).sort((a, b) => b.total - a.total)
+
+  const porMetodo = Object.values(fl.reduce((acc, v) => {
+    const k = v.metodo_pago || 'Otro'
+    if (!acc[k]) acc[k] = { metodo: k, cant: 0, total: 0 }
+    acc[k].cant++; acc[k].total += v.total; return acc
+  }, {})).sort((a, b) => b.total - a.total)
+
+  const maxDia = porDia[0]?.total || 1
+  const maxProd = porProducto[0]?.cant || 1
+  const tabStyle = (t) => ({ flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: tab === t ? G.gold : '#F5F5F5', color: tab === t ? '#fff' : G.muted })
+
   return (
     <div>
       <Hdr tit={tit} sec="📋 Ventas" onBack={() => setScr('submenu')} />
+      <div style={{ display: 'flex', borderBottom: '2px solid ' + G.goldSf }}>
+        <button onClick={() => setTab('lista')} style={tabStyle('lista')}>📋 Lista</button>
+        <button onClick={() => setTab('analisis')} style={tabStyle('analisis')}>📊 Análisis</button>
+      </div>
       <div style={{ padding: 16 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <div style={{ flex: 1, background: G.gold, borderRadius: 10, padding: 12, textAlign: 'center' }}><p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, margin: 0 }}>Vendido</p><p style={{ color: '#fff', fontSize: 22, fontWeight: 800, margin: 0 }}>S/{tV.toFixed(0)}</p></div>
           <div style={{ flex: 1, background: G.goldDk, borderRadius: 10, padding: 12, textAlign: 'center' }}><p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, margin: 0 }}>Ganancia</p><p style={{ color: '#fff', fontSize: 22, fontWeight: 800, margin: 0 }}>S/{tG.toFixed(0)}</p></div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <button onClick={exp} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>📥 Excel</button>
+        <div style={{ background: G.goldLt, borderRadius: 10, padding: '10px 12px', marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: G.goldDk }}>📅 Rango:</span>
+          <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ flex: 1, minWidth: 120, padding: '6px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12 }} />
+          <span style={{ fontSize: 11, color: G.muted }}>hasta</span>
+          <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ flex: 1, minWidth: 120, padding: '6px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12 }} />
+          {(desde || hasta) && <button onClick={() => { setDesde(''); setHasta('') }} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: G.err, color: '#fff', fontSize: 11, cursor: 'pointer' }}>✕</button>}
         </div>
-        {vents.length === 0 ? (<div style={{ textAlign: 'center', padding: 40, color: G.muted }}><p style={{ fontSize: 32 }}>📋</p><p>No hay ventas</p></div>)
-          : vents.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p></div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}</div></div></div>))}
+        {tab === 'lista' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: 12, color: G.muted }}>{fl.length} ventas</span>
+              <button onClick={exp} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>📥 Excel</button>
+            </div>
+            {fl.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: G.muted }}><p style={{ fontSize: 32 }}>📋</p><p>No hay ventas</p></div>
+              : fl.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p></div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}</div></div></div>))}
+          </>
+        )}
+        {tab === 'analisis' && (
+          <>
+            <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: G.text }}>🏆 Productos más vendidos</p>
+            {porProducto.length === 0 ? <p style={{ color: G.muted, fontSize: 13 }}>Sin datos</p>
+              : porProducto.map((p, i) => (<div key={p.nombre} style={{ marginBottom: 8 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={{ fontSize: 12, fontWeight: 600 }}>{i + 1}. {p.nombre}</span><span style={{ fontSize: 12, color: G.gold, fontWeight: 700 }}>{p.cant} und · S/{p.total.toFixed(0)}</span></div><div style={{ height: 6, background: '#F0F0F0', borderRadius: 3 }}><div style={{ height: '100%', width: (p.cant / maxProd * 100) + '%', background: G.gold, borderRadius: 3 }} /></div></div>))}
+            <p style={{ fontSize: 13, fontWeight: 700, margin: '20px 0 10px', color: G.text }}>📅 Días con más ventas</p>
+            {porDia.length === 0 ? <p style={{ color: G.muted, fontSize: 13 }}>Sin datos</p>
+              : porDia.map(d => (<div key={d.dia} style={{ marginBottom: 8 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={{ fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{d.dia}</span><span style={{ fontSize: 12, color: G.goldDk, fontWeight: 700 }}>S/{d.total.toFixed(0)} · {d.cant} ventas</span></div><div style={{ height: 6, background: '#F0F0F0', borderRadius: 3 }}><div style={{ height: '100%', width: (d.total / maxDia * 100) + '%', background: G.goldDk, borderRadius: 3 }} /></div></div>))}
+            <p style={{ fontSize: 13, fontWeight: 700, margin: '20px 0 10px', color: G.text }}>💳 Método de pago</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {porMetodo.map(m => (<div key={m.metodo} style={{ background: G.goldLt, borderRadius: 10, padding: '10px 14px', textAlign: 'center', minWidth: 100 }}><p style={{ fontSize: 18, margin: 0 }}>{m.metodo === 'Efectivo' ? '💵' : '📱'}</p><p style={{ fontSize: 12, fontWeight: 700, margin: '4px 0 2px' }}>{m.metodo}</p><p style={{ fontSize: 11, color: G.gold, fontWeight: 800, margin: 0 }}>S/{m.total.toFixed(0)}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{m.cant} ventas</p></div>))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
