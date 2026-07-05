@@ -2,10 +2,52 @@ import { useState, useEffect, useRef } from 'react'
 import { G } from '../constants'
 import { startVoice } from '../helpers'
 
-export function NavBar({ scr, setScr, setEditP }) {
+export function NavBar({ scr, setScr, setEditP, isMobile }) {
+  const items = [
+    { id: 'catalogo',   i: '📦', l: 'Catálogo' },
+    { id: 'registrar',  i: '➕', l: 'Registrar' },
+    { id: 'buscar',     i: '🔍', l: 'Buscar' },
+    { id: 'submenu',    i: '⚙️', l: 'Más' }
+  ]
+
+  /* ── DESKTOP: sidebar vertical fija ── */
+  if (!isMobile) {
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, width: 200, height: '100vh',
+        background: '#1A1A1A', borderRight: '2px solid ' + G.gold,
+        display: 'flex', flexDirection: 'column', zIndex: 100, paddingTop: 24
+      }}>
+        {/* Logo */}
+        <div style={{ padding: '0 20px 24px', borderBottom: '1px solid #333' }}>
+          <p style={{ color: G.gold, fontSize: 18, fontWeight: 800, margin: 0 }}>IA <span style={{ color: '#E8E8E8' }}>PROCESOS</span></p>
+        </div>
+        {/* Items */}
+        <div style={{ flex: 1, paddingTop: 16 }}>
+          {items.map(n => (
+            <button key={n.id}
+              onClick={() => { setScr(n.id); if (n.id === 'registrar') setEditP(null) }}
+              style={{
+                width: '100%', background: scr === n.id ? G.gold : 'transparent',
+                border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '14px 20px', textAlign: 'left',
+                borderLeft: scr === n.id ? '4px solid #fff' : '4px solid transparent',
+                transition: 'background 0.15s'
+              }}>
+              <span style={{ fontSize: 20 }}>{n.i}</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: scr === n.id ? '#1A1A1A' : '#CCC' }}>{n.l}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  /* ── MOBILE: barra inferior original ── */
   return (
     <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, background: '#fff', borderTop: '2px solid ' + G.goldSf, padding: '6px 0 env(safe-area-inset-bottom,6px)', display: 'flex', justifyContent: 'space-around', zIndex: 100 }}>
-      {[{ id: 'catalogo', i: '📦', l: 'Catálogo' }, { id: 'registrar', i: '➕', l: 'Registrar' }, { id: 'buscar', i: '🔍', l: 'Buscar' }, { id: 'submenu', i: '⚙️', l: 'Más' }].map(n => (
+      {items.map(n => (
         <button key={n.id} onClick={() => { setScr(n.id); if (n.id === 'registrar') setEditP(null) }}
           style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '4px 8px' }}>
           <span style={{ fontSize: 18 }}>{n.i}</span>

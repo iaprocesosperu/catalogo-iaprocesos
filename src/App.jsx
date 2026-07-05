@@ -10,6 +10,9 @@ import { SubMenu, OrigenesScr, CatsScr, MantScr, ClientesScr, StockScr, Historia
 import PublicProductPage from './screens/PublicProductPage'
 import PromoPage from './screens/PromoPage'
 
+/* ═══ DETECCIÓN DE DISPOSITIVO ═══ */
+const getIsMobile = () => window.innerWidth <= 768
+
 /* ═══ LOGIN ═══ */
 function AccessScreen({ login, loading }) {
   const [k, setK] = useState('')
@@ -47,6 +50,14 @@ export default function App() {
   const [notif, setNotif] = useState(null)
   const [editP, setEditP] = useState(null)
   const [ventaP, setVentaP] = useState(null)
+  const [isMobile, setIsMobile] = useState(getIsMobile())
+
+  /* Detectar cambio de tamaño de ventana */
+  useEffect(() => {
+    const handleResize = () => setIsMobile(getIsMobile())
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const notify = (m, t = 'success') => { setNotif({ m, t }); setTimeout(() => setNotif(null), 3500) }
 
@@ -98,12 +109,50 @@ export default function App() {
   const eid = emp?.id, lid = linAct?.id
   const tit = `${emp?.nombre || ''} › ${linAct?.nombre || ''}`
   const cF = cats.filter(c => c.linea_id === lid), oF = oris.filter(o => o.linea_id === lid), pF = prods.filter(p => p.linea_id === lid)
-  const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, cols, prods: pF, allProds: prods, clis, vents, listaTallas, secciones, pedidos, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G }
+  const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, cols, prods: pF, allProds: prods, clis, vents, listaTallas, secciones, pedidos, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G, isMobile }
 
-  // Página pública de producto
+  // Páginas públicas
   if (window.location.pathname.startsWith('/comprar/')) return <PublicProductPage />
   if (window.location.pathname.startsWith('/promo/')) return <PromoPage />
 
+  /* ── DESKTOP: layout con sidebar lateral ── */
+  if (!isMobile && emp && scr !== 'access') {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', background: '#F5F5F5' }}>
+        {/* Sidebar */}
+        <NavBar scr={scr} setScr={setScr} setEditP={setEditP} isMobile={false} />
+        {/* Contenido principal */}
+        <div style={{ flex: 1, marginLeft: 200, minHeight: '100vh', background: G.bg, overflowY: 'auto' }}>
+          {notif && (
+            <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10000, background: notif.t === 'success' ? G.ok : G.err, color: '#fff', padding: '10px 20px', borderRadius: 12, fontSize: 14, fontWeight: 600, boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
+              {notif.m}
+            </div>
+          )}
+          {scr === 'catalogo' && <CatalogoScreen {...P} />}
+          {scr === 'registrar' && <RegistrarScreen {...P} editP={editP} />}
+          {scr === 'buscar' && <BuscarScreen {...P} />}
+          {scr === 'venta' && <VentaScreen {...P} prod={ventaP} />}
+          {scr === 'submenu' && <SubMenu {...P} />}
+          {scr === 'lineas' && <MantScr tipo="lineas" data={lineas} {...P} />}
+          {scr === 'categorias' && <CatsScr {...P} />}
+          {scr === 'origenes' && <OrigenesScr {...P} />}
+          {scr === 'colores' && <MantScr tipo="colores" data={cols} {...P} />}
+          {scr === 'clientes' && <ClientesScr {...P} />}
+          {scr === 'stock' && <StockScr {...P} />}
+          {scr === 'historial' && <HistorialScr {...P} />}
+          {scr === 'listaTallas' && <ListasTallasScr {...P} />}
+          {scr === 'secciones' && <SeccionesScr {...P} />}
+          {scr === 'pedidos' && <PedidosScr {...P} />}
+          {scr === 'inventario' && <InventarioScr {...P} />}
+          {scr === 'conciliacion' && <ConciliacionScr {...P} />}
+          {scr === 'marketing' && <MarketingScr {...P} />}
+          {scr === 'promos' && <PromoCreatorScr {...P} />}
+        </div>
+      </div>
+    )
+  }
+
+  /* ── MOBILE: layout original ── */
   return (
     <div style={{ maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: G.bg, position: 'relative', paddingBottom: 68 }}>
       {notif && (
@@ -131,7 +180,7 @@ export default function App() {
       {scr === 'conciliacion' && <ConciliacionScr {...P} />}
       {scr === 'marketing' && <MarketingScr {...P} />}
       {scr === 'promos' && <PromoCreatorScr {...P} />}
-      {emp && scr !== 'access' && <NavBar scr={scr} setScr={setScr} setEditP={setEditP} />}
+      {emp && scr !== 'access' && <NavBar scr={scr} setScr={setScr} setEditP={setEditP} isMobile={true} />}
     </div>
   )
 }
