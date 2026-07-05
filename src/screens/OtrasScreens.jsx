@@ -743,10 +743,37 @@ export function StockScr(P) {
 
 /* ═══ HISTORIAL VENTAS ═══ */
 export function HistorialScr(P) {
-  const { tit, vents, lid, setScr, notify } = P
+  const { tit, vents, lid, setScr, notify, loadAll } = P
   const [tab, setTab] = useState('lista')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
+  const [eliminando, setEliminando] = useState(false)
+
+  const eliminarVenta = async (v) => {
+    if (!confirm(`¿Eliminar venta de "${v.nombre_producto}"? Se devolverá el stock.`)) return
+    setEliminando(true)
+    try {
+      // Devolver stock
+      if (v.producto_id) {
+        const { data: prod } = await supabase.from('productos').select('cantidad, equivalente_granel, origen_id').eq('id', v.producto_id).single()
+        if (prod) {
+          if (prod.equivalente_granel && prod.origen_id) {
+            // Granel: devolver al stock_granel del origen
+            const { data: origen } = await supabase.from('origenes').select('stock_granel').eq('id', prod.origen_id).single()
+            if (origen) await supabase.from('origenes').update({ stock_granel: (origen.stock_granel || 0) + (prod.equivalente_granel * v.cantidad) }).eq('id', prod.origen_id)
+          } else {
+            // Normal: devolver al producto
+            await supabase.from('productos').update({ cantidad: (prod.cantidad || 0) + v.cantidad }).eq('id', v.producto_id)
+          }
+        }
+      }
+      // Eliminar venta
+      await supabase.from('ventas').delete().eq('id', v.id)
+      notify('Venta eliminada y stock devuelto')
+      await loadAll()
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setEliminando(false)
+  }
 
   const fl = vents.filter(v => {
     if (desde && new Date(v.created_at) < new Date(desde)) return false
@@ -818,7 +845,7 @@ export function HistorialScr(P) {
               <button onClick={exp} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>📥 Excel</button>
             </div>
             {fl.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: G.muted }}><p style={{ fontSize: 32 }}>📋</p><p>No hay ventas</p></div>
-              : fl.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p></div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}</div></div></div>))}
+              : fl.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p></div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ marginTop: 4, display: 'block', padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑 Eliminar</button></div></div></div>))}
           </>
         )}
         {tab === 'analisis' && (
