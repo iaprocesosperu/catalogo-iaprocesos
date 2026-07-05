@@ -150,7 +150,7 @@ function OrigenDetalle({ origen, eid, onClose }) {
   const [recalculando, setRecalculando] = useState(false)
 
   const recalcularCostos = async () => {
-    if (!origen.precio_costo_defecto) { alert('Este origen no tiene precio costo definido'); return }
+    if (origen.precio_costo_defecto == null) { alert('Este origen no tiene precio costo definido'); return }
     if (!confirm(`¿Recalcular todos los productos y ventas de "${origen.nombre}" con costo S/${origen.precio_costo_defecto}?`)) return
     setRecalculando(true)
     try {
