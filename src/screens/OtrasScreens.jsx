@@ -475,6 +475,7 @@ export function MantScr(P) {
   const [nuevo, setNuevo] = useState('')
   const [eId, setEId] = useState(null)
   const [eVal, setEVal] = useState('')
+  const [eOrigenNombre, setEOrigenNombre] = useState(false)
   const formRef = useRef(null)
   const tits = { lineas: '📏 Líneas', categorias: '🏷️ Categorías', colores: '🎨 Colores' }
 
@@ -487,10 +488,17 @@ export function MantScr(P) {
 
   const abrirEditar = (it) => {
     setEId(it.id); setEVal(it.nombre)
+    if (tipo === 'lineas') setEOrigenNombre(it.incluir_origen_nombre || false)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
   }
 
-  const actualizar = async id => { if (!eVal.trim()) return; await supabase.from(tipo).update({ nombre: eVal.trim() }).eq('id', id); setEId(null); notify('Actualizado'); await loadAll() }
+  const actualizar = async id => {
+    if (!eVal.trim()) return
+    const upd = { nombre: eVal.trim() }
+    if (tipo === 'lineas') upd.incluir_origen_nombre = eOrigenNombre
+    await supabase.from(tipo).update(upd).eq('id', id)
+    setEId(null); notify('Actualizado'); await loadAll()
+  }
   const eliminar = async id => { if (!confirm('¿Eliminar?')) return; await supabase.from(tipo).update({ activo: false }).eq('id', id); notify('Eliminado'); await loadAll() }
 
   return (
@@ -502,15 +510,33 @@ export function MantScr(P) {
           <button onClick={agregar} disabled={!nuevo.trim()} style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: nuevo.trim() ? G.gold : '#ccc', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>➕</button>
         </div>
         {data.map(it => (
-          <div key={it.id} ref={eId === it.id ? formRef : null} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${eId === it.id ? G.gold : G.border}` }}>
+          <div key={it.id} ref={eId === it.id ? formRef : null} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: `1px solid ${eId === it.id ? G.gold : G.border}` }}>
             {eId === it.id ? (
-              <><input value={eVal} onChange={e => setEVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && actualizar(it.id)} style={{ flex: 1, ...iS(G), marginBottom: 0 }} autoFocus />
-                <button onClick={() => actualizar(it.id)} style={{ background: G.ok, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 11 }}>✓</button>
-                <button onClick={() => setEId(null)} style={{ background: G.muted, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 11 }}>✕</button></>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input value={eVal} onChange={e => setEVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && actualizar(it.id)} style={{ flex: 1, ...iS(G), marginBottom: 0 }} autoFocus />
+                  <button onClick={() => actualizar(it.id)} style={{ background: G.ok, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 11 }}>✓</button>
+                  <button onClick={() => setEId(null)} style={{ background: G.muted, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 11 }}>✕</button>
+                </div>
+                {tipo === 'lineas' && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: G.text, padding: '6px 8px', background: G.goldLt, borderRadius: 8 }}>
+                    <input type="checkbox" checked={eOrigenNombre} onChange={e => setEOrigenNombre(e.target.checked)}
+                      style={{ width: 16, height: 16, accentColor: G.gold, cursor: 'pointer' }} />
+                    Incluir origen al inicio del nombre automático
+                  </label>
+                )}
+              </div>
             ) : (
-              <><span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>{it.nombre}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 14, fontWeight: 500 }}>{it.nombre}</span>
+                  {tipo === 'lineas' && it.incluir_origen_nombre && (
+                    <span style={{ marginLeft: 8, fontSize: 10, background: G.goldSf, color: G.goldDk, padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>+Origen</span>
+                  )}
+                </div>
                 <button onClick={() => abrirEditar(it)} style={{ background: G.goldSf, color: G.goldDk, border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 10 }}>Editar</button>
-                <button onClick={() => eliminar(it.id)} style={{ background: '#FEE2E2', color: G.err, border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 10 }}>🗑</button></>
+                <button onClick={() => eliminar(it.id)} style={{ background: '#FEE2E2', color: G.err, border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: 10 }}>🗑</button>
+              </div>
             )}
           </div>
         ))}

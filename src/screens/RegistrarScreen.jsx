@@ -75,8 +75,13 @@ export default function RegistrarScreen(P) {
 
   useEffect(() => {
     const cat = cats.find(c => c.id === parseInt(f.categoria_id))
-    const pts = [cat?.nombre || '']; if (f.color) pts.push(f.color)
-    if (f.atributos) Object.values(f.atributos).forEach(v => { if (v && v !== 'Sin Género') pts.push(v) })
+    const linAct = P.lineas?.find(l => l.id === P.lid)
+    const origenAct = P.oris?.find(o => o.id === parseInt(f.origen_id))
+    const pts = []
+    if (linAct?.incluir_origen_nombre && origenAct?.nombre) pts.push(origenAct.nombre)
+    pts.push(cat?.nombre || '')
+    if (f.color) pts.push(f.color)
+    if (f.atributos) Object.values(f.atributos).forEach(v => { if (v) pts.push(v) })
     const a = pts.filter(Boolean).join(' '); if (a) s('nombre', a)
   }, [f.categoria_id, f.color, f.atributos, cats])
 
@@ -611,7 +616,7 @@ export default function RegistrarScreen(P) {
           {catSel && tallas.length > 0 && !attrsDef.find(a => a.key === 'genero') && (
             <><label style={{ fontSize: 11, color: G.muted }}>Género</label>
               <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                {['Mujer', 'Hombre', 'Unisex', 'Sin Género'].map(g => <button key={g} onClick={() => sA('genero', g)} style={{ flex: 1, padding: 7, borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: f.atributos?.genero === g ? G.gold : G.goldSf, color: f.atributos?.genero === g ? '#fff' : G.goldDk }}>{g}</button>)}
+                {['Mujer', 'Hombre', 'Unisex'].map(g => <button key={g} onClick={() => sA('genero', g)} style={{ flex: 1, padding: 7, borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: f.atributos?.genero === g ? G.gold : G.goldSf, color: f.atributos?.genero === g ? '#fff' : G.goldDk }}>{g}</button>)}
               </div></>
           )}
 
