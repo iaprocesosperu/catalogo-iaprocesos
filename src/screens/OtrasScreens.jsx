@@ -925,24 +925,104 @@ export function SeccionesScr(P) {
 
 /* ═══ PEDIDOS ONLINE ═══ */
 export function PedidosScr(P) {
-  const { eid, tit, notify, setScr } = P
+  const { eid, lid, tit, notify, loadAll, setScr } = P
   const [pedidos, setPedidos] = useState([])
   const [cargando, setCargando] = useState(true)
   const [fotoVer, setFotoVer] = useState(null)
+  const [modalConfirm, setModalConfirm] = useState(null) // pedido a confirmar
+  const [entregado, setEntregado] = useState(null) // true/false
+  const [procesando, setProcesando] = useState(false)
 
-  useEffect(() => {
-    const cargar = async () => {
-      const { data } = await supabase.from('pedidos').select('*').eq('empresa_id', eid).order('created_at', { ascending: false })
-      setPedidos(data || []); setCargando(false)
+  const cargarPedidos = async () => {
+    const { data } = await supabase.from('pedidos').select('*').eq('empresa_id', eid).order('created_at', { ascending: false })
+    setPedidos(data || []); setCargando(false)
+  }
+
+  useEffect(() => { cargarPedidos() }, [])
+
+  /* ── Descontar stock de un producto ── */
+  const descontarStock = async (productoId, cantidad) => {
+    const { data: prod } = await supabase.from('productos').select('cantidad, equivalente_granel, origen_id').eq('id', productoId).single()
+    if (!prod) return
+    if (prod.equivalente_granel && prod.origen_id) {
+      // Granel: descontar del origen
+      const { data: origen } = await supabase.from('origenes').select('stock_granel').eq('id', prod.origen_id).single()
+      if (origen) {
+        const nuevo = (origen.stock_granel || 0) - (prod.equivalente_granel * cantidad)
+        await supabase.from('origenes').update({ stock_granel: nuevo }).eq('id', prod.origen_id)
+      }
+    } else {
+      // Normal: descontar del producto
+      await supabase.from('productos').update({ cantidad: Math.max(0, (prod.cantidad || 0) - cantidad) }).eq('id', productoId)
     }
-    cargar()
-  }, [])
+  }
 
-  const cambiarEstado = async (id, estado) => {
-    await supabase.from('pedidos').update({ estado }).eq('id', id)
-    setPedidos(ps => ps.map(p => p.id === id ? { ...p, estado } : p))
-    if (estado === 'verificado') notify('✅ Pedido verificado')
-    if (estado === 'cancelado') notify('Pedido cancelado')
+  /* ── Confirmar pedido → crear venta(s) + descontar stock ── */
+  const confirmarPedido = async () => {
+    if (entregado === null) { notify('Indica si ya entregaste el producto', 'error'); return }
+    setProcesando(true)
+    const p = modalConfirm
+    try {
+      const tipoEntrega = entregado ? 'entregado' : 'por entregar'
+
+      if (p.tipo_pedido === 'carrito') {
+        // Carrito: leer items del pedido
+        const { data: items } = await supabase.from('pedido_items').select('*,productos(precio_costo,equivalente_granel,origen_id,cantidad)').eq('pedido_id', p.id)
+        for (const item of (items || [])) {
+          await supabase.from('ventas').insert({
+            empresa_id: eid,
+            linea_id: lid,
+            producto_id: item.producto_id,
+            codigo_producto: item.codigo,
+            nombre_producto: item.nombre,
+            precio_costo: item.productos?.precio_costo || 0,
+            precio_venta_original: item.precio_venta,
+            precio_venta_real: item.precio_venta,
+            cantidad: item.cantidad,
+            total: item.subtotal,
+            metodo_pago: 'Yape',
+            tipo_entrega: tipoEntrega,
+            estado: tipoEntrega,
+            nota: p.nota || null
+          })
+          if (item.producto_id) await descontarStock(item.producto_id, item.cantidad)
+        }
+      } else {
+        // Pedido individual
+        const { data: prod } = await supabase.from('productos').select('id,codigo,precio_costo,equivalente_granel,origen_id,cantidad').eq('codigo', p.codigo_producto).eq('empresa_id', eid).single()
+        await supabase.from('ventas').insert({
+          empresa_id: eid,
+          linea_id: lid,
+          producto_id: prod?.id || p.producto_id,
+          codigo_producto: p.codigo_producto,
+          nombre_producto: p.nombre_producto,
+          precio_costo: prod?.precio_costo || 0,
+          precio_venta_original: p.precio_venta,
+          precio_venta_real: p.precio_venta,
+          cantidad: 1,
+          total: p.precio_venta,
+          metodo_pago: 'Yape',
+          tipo_entrega: tipoEntrega,
+          estado: tipoEntrega,
+          nota: p.nota || null
+        })
+        if (prod?.id) await descontarStock(prod.id, 1)
+      }
+
+      // Actualizar pedido a verificado
+      await supabase.from('pedidos').update({ estado: 'verificado' }).eq('id', p.id)
+      notify(entregado ? '✅ Pedido verificado y venta registrada' : '✅ Verificado — pendiente de entrega')
+      setModalConfirm(null); setEntregado(null)
+      await cargarPedidos()
+      await loadAll()
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setProcesando(false)
+  }
+
+  const cancelar = async (id) => {
+    await supabase.from('pedidos').update({ estado: 'cancelado' }).eq('id', id)
+    setPedidos(ps => ps.map(p => p.id === id ? { ...p, estado: 'cancelado' } : p))
+    notify('Pedido cancelado')
   }
 
   const colorEstado = e => e === 'verificado' ? G.ok : e === 'cancelado' ? G.err : G.warn
@@ -951,11 +1031,52 @@ export function PedidosScr(P) {
   return (
     <div>
       <Hdr tit={tit} sec="🛒 Pedidos Online" onBack={() => setScr('submenu')} />
+
+      {/* Visor foto */}
       {fotoVer && (
         <div onClick={() => setFotoVer(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <img src={fotoVer} alt="" style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: 8 }} />
         </div>
       )}
+
+      {/* Modal confirmación */}
+      {modalConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 420, boxShadow: '0 8px 30px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 800, margin: '0 0 6px' }}>✅ Confirmar pago verificado</h3>
+            <p style={{ fontSize: 13, color: G.muted, margin: '0 0 14px' }}>
+              {modalConfirm.nombre_cliente} · <strong style={{ color: G.gold }}>S/{modalConfirm.total_pedido || modalConfirm.precio_venta}</strong>
+            </p>
+            <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: G.text }}>¿Ya entregaste el producto?</p>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <button onClick={() => setEntregado(true)}
+                style={{ flex: 1, padding: 12, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, background: entregado === true ? G.ok : '#F0F0F0', color: entregado === true ? '#fff' : G.text }}>
+                ✅ Sí, ya entregué
+              </button>
+              <button onClick={() => setEntregado(false)}
+                style={{ flex: 1, padding: 12, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, background: entregado === false ? G.warn : '#F0F0F0', color: entregado === false ? '#fff' : G.text }}>
+                🕐 Aún no
+              </button>
+            </div>
+            {entregado === false && (
+              <div style={{ background: '#FEF3C7', borderRadius: 8, padding: 10, marginBottom: 14, fontSize: 12, color: '#92400E' }}>
+                La venta se registrará como <strong>"por entregar"</strong> y podrás marcarla como entregada después.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setModalConfirm(null); setEntregado(null) }} disabled={procesando}
+                style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', fontSize: 13, cursor: 'pointer', color: G.muted }}>
+                Cancelar
+              </button>
+              <button onClick={confirmarPedido} disabled={procesando || entregado === null}
+                style={{ flex: 2, padding: 12, borderRadius: 10, border: 'none', background: entregado === null ? '#ccc' : G.gold, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                {procesando ? '⏳ Procesando...' : '✅ Confirmar y registrar venta'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ padding: 16 }}>
         {pendientes > 0 && (
           <div style={{ background: G.warn, borderRadius: 10, padding: 12, marginBottom: 12, textAlign: 'center' }}>
@@ -978,18 +1099,32 @@ export function PedidosScr(P) {
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 12, fontWeight: 600, margin: 0 }}>{p.nombre_producto}</p>
-                  <p style={{ fontSize: 11, color: G.gold, fontWeight: 700, margin: '2px 0 0' }}>S/{p.precio_venta}</p>
+                  <p style={{ fontSize: 11, color: G.gold, fontWeight: 700, margin: '2px 0 0' }}>S/{p.total_pedido || p.precio_venta}</p>
+                  {p.delivery && <p style={{ fontSize: 10, color: G.muted, margin: '2px 0 0' }}>🛵 {p.distrito}, {p.provincia} — {p.direccion_delivery}</p>}
                   {p.nota && <p style={{ fontSize: 10, color: G.muted, margin: '2px 0 0' }}>{p.nota}</p>}
                 </div>
-                {p.foto_comprobante && (
-                  <img src={p.foto_comprobante} alt="" onClick={() => setFotoVer(p.foto_comprobante)}
-                    style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', border: '2px solid ' + G.border }} />
-                )}
+                {/* Fotos comprobante */}
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {p.fotos_comprobante?.map((url, i) => (
+                    <img key={i} src={url} alt="" onClick={() => setFotoVer(url)}
+                      style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, cursor: 'pointer', border: '2px solid ' + G.border }} />
+                  ))}
+                  {!p.fotos_comprobante && p.foto_comprobante && (
+                    <img src={p.foto_comprobante} alt="" onClick={() => setFotoVer(p.foto_comprobante)}
+                      style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, cursor: 'pointer', border: '2px solid ' + G.border }} />
+                  )}
+                </div>
               </div>
               {p.estado === 'pendiente' && (
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => cambiarEstado(p.id, 'verificado')} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: G.ok, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✅ Verificar pago</button>
-                  <button onClick={() => cambiarEstado(p.id, 'cancelado')} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: G.err, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>❌ Cancelar</button>
+                  <button onClick={() => { setModalConfirm(p); setEntregado(null) }}
+                    style={{ flex: 2, padding: '8px 0', borderRadius: 8, border: 'none', background: G.ok, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    ✅ ¡Clic aquí si ya verifiqué el pago!
+                  </button>
+                  <button onClick={() => cancelar(p.id)}
+                    style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: G.err, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    ❌ Cancelar
+                  </button>
                 </div>
               )}
             </div>
