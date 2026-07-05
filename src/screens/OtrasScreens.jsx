@@ -748,8 +748,7 @@ export function HistorialScr(P) {
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
 
-  const ventasLinea = vents.filter(v => v.linea_id ? v.linea_id === lid : true)
-  const fl = ventasLinea.filter(v => {
+  const fl = vents.filter(v => {
     if (desde && new Date(v.created_at) < new Date(desde)) return false
     if (hasta && new Date(v.created_at) > new Date(hasta + 'T23:59:59')) return false
     return true

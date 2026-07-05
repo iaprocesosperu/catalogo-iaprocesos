@@ -106,7 +106,6 @@ export default function CarritoPage({ carrito, config, onVolver, onPedidoEnviado
       await supabase.from('pedido_items').insert(items)
 
       setEnviado(true)
-      onPedidoEnviado?.()
     } catch (e) { alert('Error al enviar: ' + e.message) }
     setEnviando(false)
   }
@@ -128,7 +127,7 @@ export default function CarritoPage({ carrito, config, onVolver, onPedidoEnviado
           💬 Contactar por WhatsApp
         </a>
       )}
-      <button onClick={onVolver}
+      <button onClick={() => { onPedidoEnviado?.(); onVolver() }}
         style={{ display: 'block', width: '100%', maxWidth: 320, padding: 13, borderRadius: 12, border: `2px solid ${C}`, background: 'transparent', color: C, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
         Seguir comprando
       </button>
