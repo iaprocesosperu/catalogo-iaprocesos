@@ -968,9 +968,8 @@ export function PedidosScr(P) {
         // Carrito: leer items del pedido
         const { data: items } = await supabase.from('pedido_items').select('*,productos(precio_costo,equivalente_granel,origen_id,cantidad)').eq('pedido_id', p.id)
         for (const item of (items || [])) {
-          await supabase.from('ventas').insert({
+          const { error: ve } = await supabase.from('ventas').insert({
             empresa_id: eid,
-            linea_id: lid,
             producto_id: item.producto_id,
             codigo_producto: item.codigo,
             nombre_producto: item.nombre,
@@ -984,14 +983,14 @@ export function PedidosScr(P) {
             estado: tipoEntrega,
             nota: p.nota || null
           })
+          if (ve) throw new Error('Error venta: ' + ve.message)
           if (item.producto_id) await descontarStock(item.producto_id, item.cantidad)
         }
       } else {
         // Pedido individual
         const { data: prod } = await supabase.from('productos').select('id,codigo,precio_costo,equivalente_granel,origen_id,cantidad').eq('codigo', p.codigo_producto).eq('empresa_id', eid).single()
-        await supabase.from('ventas').insert({
+        const { error: ve } = await supabase.from('ventas').insert({
           empresa_id: eid,
-          linea_id: lid,
           producto_id: prod?.id || p.producto_id,
           codigo_producto: p.codigo_producto,
           nombre_producto: p.nombre_producto,
@@ -1005,6 +1004,7 @@ export function PedidosScr(P) {
           estado: tipoEntrega,
           nota: p.nota || null
         })
+        if (ve) throw new Error('Error venta: ' + ve.message)
         if (prod?.id) await descontarStock(prod.id, 1)
       }
 
