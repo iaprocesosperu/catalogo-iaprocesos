@@ -8,10 +8,21 @@ import BuscarScreen from './screens/BuscarScreen'
 import VentaScreen from './screens/VentaScreen'
 import { SubMenu, OrigenesScr, CatsScr, MantScr, ClientesScr, StockScr, HistorialScr, ListasTallasScr, SeccionesScr, PedidosScr, InventarioScr, ConciliacionScr, MarketingScr, PromoCreatorScr } from './screens/OtrasScreens'
 import PublicProductPage from './screens/PublicProductPage'
+import PublicCatalogPage from './screens/PublicCatalogPage'
 import PromoPage from './screens/PromoPage'
 
 /* ═══ DETECCIÓN DE DISPOSITIVO ═══ */
 const getIsMobile = () => window.innerWidth <= 768
+
+/* ═══ DETECCIÓN DE SUBDOMINIO PÚBLICO ═══ */
+const SUBDOMINIOS_PUBLICOS = ['lacasita', 'amychic', 'elmiau']
+const getSubdominio = () => {
+  const hostname = window.location.hostname  // ej: lacasita.iaprocesos.com.pe
+  const sub = hostname.split('.')[0]
+  // En desarrollo local no aplicar
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return null
+  return SUBDOMINIOS_PUBLICOS.includes(sub) ? sub : null
+}
 
 /* ═══ LOGIN ═══ */
 function AccessScreen({ login, loading }) {
@@ -111,17 +122,18 @@ export default function App() {
   const cF = cats.filter(c => c.linea_id === lid), oF = oris.filter(o => o.linea_id === lid), pF = prods.filter(p => p.linea_id === lid)
   const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, cols, prods: pF, allProds: prods, clis, vents, listaTallas, secciones, pedidos, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G, isMobile }
 
-  // Páginas públicas
+  // ── Páginas públicas por URL ──
   if (window.location.pathname.startsWith('/comprar/')) return <PublicProductPage />
   if (window.location.pathname.startsWith('/promo/')) return <PromoPage />
+
+  // ── Catálogo público por subdominio ──
+  if (getSubdominio()) return <PublicCatalogPage />
 
   /* ── DESKTOP: layout con sidebar lateral ── */
   if (!isMobile && emp && scr !== 'access') {
     return (
       <div style={{ display: 'flex', minHeight: '100vh', background: '#F5F5F5' }}>
-        {/* Sidebar */}
         <NavBar scr={scr} setScr={setScr} setEditP={setEditP} isMobile={false} />
-        {/* Contenido principal */}
         <div style={{ flex: 1, marginLeft: 200, minHeight: '100vh', background: G.bg, overflowY: 'auto' }}>
           {notif && (
             <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10000, background: notif.t === 'success' ? G.ok : G.err, color: '#fff', padding: '10px 20px', borderRadius: 12, fontSize: 14, fontWeight: 600, boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
