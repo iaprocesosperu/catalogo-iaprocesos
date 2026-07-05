@@ -261,7 +261,7 @@ function OrigenDetalle({ origen, eid, onClose }) {
             </div>
           </div>
         )}
-        {origen.precio_costo_defecto > 0 && (
+        {(
           <div style={{ background: '#FFF8E7', border: '1px solid #F5A623', borderRadius: 10, padding: '12px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <p style={{ fontSize: 12, fontWeight: 700, color: '#B45309', margin: 0 }}>🔄 Recalcular costos</p>
