@@ -85,9 +85,10 @@ export default function PublicCatalogPage({ onIntranet }) {
       onPedidoEnviado={() => { setCarrito([]); setVerCarrito(false) }} />
   )
 
-  const waLink = config?.whatsapp_link
-    ? `https://${config.whatsapp_link}`
-    : config?.whatsapp ? `https://wa.me/51${config.whatsapp.replace(/\D/g, '')}` : null
+  const waMensaje = encodeURIComponent('Hola, estoy interesado/a en sus productos de El Miau')
+  const waLink = config?.whatsapp
+    ? `https://wa.me/51${config.whatsapp.replace(/\D/g, '')}?text=${waMensaje}`
+    : null
 
   return (
     <div style={{ minHeight: '100vh', background: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', color: '#1A1A1A' }}>
