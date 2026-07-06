@@ -80,7 +80,7 @@ export default function RegistrarScreen(P) {
     const pts = []
     if (linAct?.incluir_origen_nombre && origenAct?.nombre) pts.push(origenAct.nombre)
     pts.push(cat?.nombre || '')
-    if (f.color) pts.push(f.color)
+    if (f.color && f.color !== 'Estándar') pts.push(f.color)
     if (f.atributos) Object.values(f.atributos).forEach(v => { if (v && v !== 'Sin Género') pts.push(v) })
     const a = pts.filter(Boolean).join(' '); if (a) s('nombre', a)
   }, [f.categoria_id, f.color, f.atributos, cats])
@@ -657,7 +657,7 @@ export default function RegistrarScreen(P) {
           <input value={f.color} onChange={e => { s('color', e.target.value); setColSrch(e.target.value) }} placeholder="Escribe o selecciona..." style={iE('color')} />
           {colSrch && colsFilt.length > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
-              {colsFilt.slice(0, 8).map(c => <button key={c.id} onClick={() => { s('color', c.nombre); setColSrch('') }} style={{ padding: '3px 8px', borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', fontSize: 10, cursor: 'pointer' }}>{c.nombre}</button>)}
+              <button onClick={() => { s('color', 'Estándar'); setColSrch('') }} style={{ padding: '3px 8px', borderRadius: 10, border: '1px solid ' + G.gold, background: G.goldSf, color: G.goldDk, fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>Estándar</button>{colsFilt.slice(0, 8).map(c => <button key={c.id} onClick={() => { s('color', c.nombre); setColSrch('') }} style={{ padding: '3px 8px', borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', fontSize: 10, cursor: 'pointer' }}>{c.nombre}</button>)}
             </div>
           )}
 
