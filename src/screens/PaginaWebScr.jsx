@@ -92,7 +92,11 @@ export default function PaginaWebScr({ emp, notify }) {
       if (logoFile) {
         const blob = await comprimirImagen(logoFile, 400)
         updates.logo_url = await subirFoto(blob, `logo_${subSel.subdominio}`)
+      } else if (!logoPrev) {
+        updates.logo_url = null
       }
+      if (!bannerPrev && !bannerFile) updates.banner_url = null
+      if (!heroPrev && !heroFile) updates.hero_url = null
       await supabase.from('subdominios').update(updates).eq('id', subSel.id)
       notify('Página web actualizada ✓')
       await cargar()
