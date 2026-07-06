@@ -134,8 +134,8 @@ export default function PublicCatalogPage({ onIntranet }) {
           }
         </div>
         <div style={{ display: 'flex', gap: 24, fontSize: 14, position: 'relative' }}>
-          <a href="#productos" style={{ textDecoration: 'none', color: '#fff', fontWeight: 600 }}>Productos</a>
-          <a href="#contacto" style={{ textDecoration: 'none', color: '#fff', fontWeight: 600 }}>Contacto</a>
+          <a href="#productos" style={{ textDecoration: 'none', color: '#1A1A1A', fontWeight: 700, textShadow: '0 1px 3px rgba(255,255,255,0.8)', background: 'rgba(255,255,255,0.6)', padding: '4px 12px', borderRadius: 20 }}>Productos</a>
+          <a href="#contacto" style={{ textDecoration: 'none', color: '#1A1A1A', fontWeight: 700, textShadow: '0 1px 3px rgba(255,255,255,0.8)', background: 'rgba(255,255,255,0.6)', padding: '4px 12px', borderRadius: 20 }}>Contacto</a>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', position: 'relative' }}>
           {waLink && (
