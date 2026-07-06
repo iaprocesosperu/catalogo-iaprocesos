@@ -58,6 +58,7 @@ export default function CarritoPage({ carrito, config, onVolver, onPedidoEnviado
 
   const enviar = async () => {
     if (!form.nombre.trim()) { alert('Tu nombre es obligatorio'); return }
+    if (!form.telefono.trim()) { alert('Tu teléfono es obligatorio para coordinar el pedido'); return }
     if (fotos.length === 0) { alert('Adjunta al menos un comprobante de pago'); return }
     if (delivery && !direccion.trim()) { alert('Ingresa tu dirección de entrega'); return }
     setEnviando(true)
@@ -176,7 +177,7 @@ export default function CarritoPage({ carrito, config, onVolver, onPedidoEnviado
         <div style={{ background: '#fff', borderRadius: 14, padding: 14, marginBottom: 14, border: '1px solid #eee' }}>
           <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 12px' }}>👤 Tus datos</p>
           <input value={form.nombre} onChange={e => s('nombre', e.target.value)} placeholder="Tu nombre *" style={iS} />
-          <input value={form.telefono} onChange={e => s('telefono', e.target.value)} placeholder="Tu teléfono (opcional)" style={iS} type="tel" />
+          <input value={form.telefono} onChange={e => s('telefono', e.target.value)} placeholder="Tu teléfono *" style={iS} type="tel" required />
           <textarea value={form.nota} onChange={e => s('nota', e.target.value)} placeholder="Nota adicional (opcional)" rows={2} style={{ ...iS, resize: 'vertical' }} />
         </div>
 
@@ -217,7 +218,47 @@ export default function CarritoPage({ carrito, config, onVolver, onPedidoEnviado
                   {!distritos.length && <option value={provincia}>{provincia}</option>}
                 </select>
               </div>
-              <div>
+
+              {/* Lógica de delivery según destino y monto */}
+              {distrito && (() => {
+                const esMarcona = distrito === 'Marcona' || distrito?.toLowerCase().includes('marcona')
+                const esFueraPeru = dpto !== 'Ica' && dpto !== 'Lima' && dpto !== 'Arequipa'
+
+                if (esMarcona && total >= 20) {
+                  return (
+                    <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '12px 14px', marginTop: 10 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#166534', margin: '0 0 4px' }}>✅ Delivery GRATIS</p>
+                      <p style={{ fontSize: 12, color: '#166534', margin: 0 }}>Tu pedido supera S/20 — te lo llevamos sin costo adicional a Marcona.</p>
+                    </div>
+                  )
+                } else if (esMarcona && total < 20) {
+                  return (
+                    <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 14px', marginTop: 10 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#92400E', margin: '0 0 6px' }}>🏪 Recojo en tienda</p>
+                      <p style={{ fontSize: 12, color: '#92400E', margin: '0 0 3px' }}>Por compras menores a S/20 en Marcona, el recojo es en tienda:</p>
+                      <p style={{ fontSize: 12, color: '#92400E', margin: '0 0 3px' }}>📍 <strong>San Martín 0-12</strong></p>
+                      <p style={{ fontSize: 12, color: '#92400E', margin: '0 0 3px' }}>🕐 Lunes a Sábado de 5:30 a 9:00</p>
+                      <a href={`https://wa.me/51${config?.whatsapp?.replace(/\D/g, '') || '967539739'}`} target="_blank" rel="noreferrer"
+                        style={{ display: 'inline-block', marginTop: 6, background: '#25D366', color: '#fff', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+                        💬 Coordinar con El Miau
+                      </a>
+                    </div>
+                  )
+                } else {
+                  return (
+                    <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '12px 14px', marginTop: 10 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8', margin: '0 0 4px' }}>📦 Envío por agencia</p>
+                      <p style={{ fontSize: 12, color: '#1E40AF', margin: '0 0 6px' }}>Tu pedido será enviado por agencia de transporte a tu ciudad. Coordinamos contigo los detalles.</p>
+                      <a href={`https://wa.me/51${config?.whatsapp?.replace(/\D/g, '') || '967539739'}`} target="_blank" rel="noreferrer"
+                        style={{ display: 'inline-block', background: '#25D366', color: '#fff', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+                        💬 Coordinar envío
+                      </a>
+                    </div>
+                  )
+                }
+              })()}
+
+              <div style={{ marginTop: 10 }}>
                 <label style={{ fontSize: 11, color: '#666', fontWeight: 600 }}>DIRECCIÓN *</label>
                 <input value={direccion} onChange={e => setDireccion(e.target.value)}
                   placeholder="Calle, número, referencia..." style={iS} />
@@ -226,13 +267,8 @@ export default function CarritoPage({ carrito, config, onVolver, onPedidoEnviado
               {/* Mapa OpenStreetMap */}
               {distrito && (
                 <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #ddd', marginTop: 4 }}>
-                  <iframe
-                    title="mapa"
-                    width="100%"
-                    height="180"
-                    style={{ display: 'block', border: 'none' }}
-                    src={`https://www.openstreetmap.org/export/embed.html?bbox=-75.5,-15.5,-74.5,-14.5&layer=mapnik&marker=${encodeURIComponent(distrito + ', ' + provincia + ', Peru')}`}
-                  />
+                  <iframe title="mapa" width="100%" height="180" style={{ display: 'block', border: 'none' }}
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=-75.5,-15.5,-74.5,-14.5&layer=mapnik&marker=${encodeURIComponent(distrito + ', ' + provincia + ', Peru')}`} />
                   <a href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(distrito + ' ' + provincia + ' Peru')}`}
                     target="_blank" rel="noreferrer"
                     style={{ display: 'block', textAlign: 'center', padding: '6px', fontSize: 11, color: C, background: '#f9f9f9' }}>
@@ -276,8 +312,8 @@ export default function CarritoPage({ carrito, config, onVolver, onPedidoEnviado
         </div>
 
         {/* Botón enviar */}
-        <button onClick={enviar} disabled={enviando || !form.nombre.trim() || fotos.length === 0}
-          style={{ width: '100%', padding: 17, borderRadius: 14, border: 'none', background: (form.nombre.trim() && fotos.length > 0) ? C : '#ccc', color: '#fff', fontSize: 17, fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,0,0,0.15)' }}>
+        <button onClick={enviar} disabled={enviando || !form.nombre.trim() || !form.telefono.trim() || fotos.length === 0}
+          style={{ width: '100%', padding: 17, borderRadius: 14, border: 'none', background: (form.nombre.trim() && form.telefono.trim() && fotos.length > 0) ? C : '#ccc', color: '#fff', fontSize: 17, fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,0,0,0.15)' }}>
           {enviando ? '⏳ Enviando pedido...' : `✅ Confirmar pedido · S/${total.toFixed(2)}`}
         </button>
       </div>
