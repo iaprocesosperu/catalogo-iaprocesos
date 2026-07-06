@@ -655,11 +655,13 @@ export default function RegistrarScreen(P) {
             </div>
           )}
           <input value={f.color} onChange={e => { s('color', e.target.value); setColSrch(e.target.value) }} placeholder="Escribe o selecciona..." style={iE('color')} />
-          {colSrch && colsFilt.length > 0 && (
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
-              <button onClick={() => { s('color', 'Estándar'); setColSrch('') }} style={{ padding: '3px 8px', borderRadius: 10, border: '1px solid ' + G.gold, background: G.goldSf, color: G.goldDk, fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>Estándar</button>{colsFilt.slice(0, 8).map(c => <button key={c.id} onClick={() => { s('color', c.nombre); setColSrch('') }} style={{ padding: '3px 8px', borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', fontSize: 10, cursor: 'pointer' }}>{c.nombre}</button>)}
-            </div>
-          )}
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4, marginTop: 4 }}>
+            <button onClick={() => { s('color', 'Estándar'); setColSrch('') }}
+              style={{ padding: '3px 10px', borderRadius: 10, border: '1px solid ' + G.gold, background: f.color === 'Estándar' ? G.gold : G.goldSf, color: f.color === 'Estándar' ? '#fff' : G.goldDk, fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
+              ✓ Estándar
+            </button>
+            {colSrch && colsFilt.slice(0, 8).map(c => <button key={c.id} onClick={() => { s('color', c.nombre); setColSrch('') }} style={{ padding: '3px 8px', borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', fontSize: 10, cursor: 'pointer' }}>{c.nombre}</button>)}
+          </div>
 
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Precio Costo (S/) — opcional</label>
