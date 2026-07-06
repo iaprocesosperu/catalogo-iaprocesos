@@ -9,8 +9,8 @@ const TESTIMONIOS = [
 ]
 
 const BENEFICIOS = [
-  { i: '🚚', t: 'Delivery gratis', s: 'A todo Marcona' },
-  { i: '📱', t: 'Pago por Yape', s: 'Rápido y seguro' },
+  { i: '🚚', t: 'Delivery', s: 'A todo el Perú' },
+  { i: '📱', t: 'Yape, Plin, Transferencia', s: 'Pago fácil y seguro' },
   { i: '💬', t: 'Atención directa', s: 'WhatsApp disponible' },
   { i: '⭐', t: 'Calidad garantizada', s: 'Productos seleccionados' },
 ]
@@ -128,10 +128,7 @@ export default function PublicCatalogPage({ onIntranet }) {
         <div style={{ position: 'absolute', top: 0, left: '30%', fontSize: 20, opacity: 0.1 }}>🐾</div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
-          {config?.logo_url
-            ? <img src={config.logo_url} alt="logo" style={{ height: 38, objectFit: 'contain', borderRadius: 8 }} />
-            : <><span style={{ fontSize: 24 }}>🐾</span><span style={{ fontSize: 18, fontWeight: 800, color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>{config?.nombre_tienda || 'El Miau'}</span><span style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginLeft: 4 }}>Cat Shop</span></>
-          }
+          {config?.logo_url && <img src={config.logo_url} alt="logo" style={{ height: 38, objectFit: 'contain', borderRadius: 8 }} />}
         </div>
         <div style={{ display: 'flex', gap: 24, fontSize: 14, position: 'relative' }}>
           <a href="#productos" style={{ textDecoration: 'none', color: '#1A1A1A', fontWeight: 700, textShadow: '0 1px 3px rgba(255,255,255,0.8)', background: 'rgba(255,255,255,0.6)', padding: '4px 12px', borderRadius: 20 }}>Productos</a>
@@ -167,13 +164,13 @@ export default function PublicCatalogPage({ onIntranet }) {
         <div className="hero-grid">
           <div className="hero-txt">
             <span style={{ background: '#FFF3DC', color: '#B86B00', fontSize: 12, padding: '4px 12px', borderRadius: 20, fontWeight: 600 }}>
-              🚚 {config?.slogan || 'Delivery gratis a Marcona'}
+              🚚 {config?.slogan || 'Delivery a todo el Perú'}
             </span>
             <h1 style={{ fontSize: 'clamp(32px, 5vw, 44px)', fontWeight: 800, lineHeight: 1.12, margin: '18px 0 16px', letterSpacing: -1 }}>
               Lo mejor para<br/><span style={{ color: C }}>tu gato,</span><br/>a tu puerta
             </h1>
             <p style={{ fontSize: 16, color: '#666', lineHeight: 1.7, margin: '0 0 32px', maxWidth: 420 }}>
-              Arena, alimento y accesorios de calidad. Pide hoy y recíbelo en Marcona sin costo adicional.
+              Arena, alimentos, accesorios de calidad. Pide hoy y recíbelo cuando lo necesites.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <a href="#productos" style={{ background: C, color: '#fff', padding: '13px 28px', borderRadius: 10, fontWeight: 700, textDecoration: 'none', fontSize: 15 }}>
