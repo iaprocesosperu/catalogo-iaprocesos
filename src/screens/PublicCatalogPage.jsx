@@ -114,29 +114,38 @@ export default function PublicCatalogPage({ onIntranet }) {
 
       {/* NAV */}
       <nav style={{
-        position: 'sticky', top: 0, zIndex: 100, background: '#fff',
-        borderBottom: '1px solid #F0F0F0', padding: '14px 5%',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+        position: 'sticky', top: 0, zIndex: 100,
+        background: config?.banner_url ? 'transparent' : C,
+        backgroundImage: config?.banner_url ? `url(${config.banner_url})` : 'none',
+        backgroundSize: 'cover', backgroundPosition: 'center',
+        borderBottom: 'none', padding: '12px 5%',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        overflow: 'hidden'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Huellas decorativas de fondo */}
+        <div style={{ position: 'absolute', top: -8, right: '20%', fontSize: 28, opacity: 0.15, transform: 'rotate(20deg)' }}>🐾</div>
+        <div style={{ position: 'absolute', bottom: -8, right: '35%', fontSize: 22, opacity: 0.12, transform: 'rotate(-15deg)' }}>🐾</div>
+        <div style={{ position: 'absolute', top: 0, left: '30%', fontSize: 20, opacity: 0.1 }}>🐾</div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
           {config?.logo_url
-            ? <img src={config.logo_url} alt="logo" style={{ height: 36, objectFit: 'contain' }} />
-            : <><span style={{ fontSize: 22 }}>🐾</span><span style={{ fontSize: 17, fontWeight: 700, color: C }}>{config?.nombre_tienda || 'El Miau'}</span><span style={{ fontSize: 12, color: '#999', marginLeft: 4 }}>Cat Shop</span></>
+            ? <img src={config.logo_url} alt="logo" style={{ height: 38, objectFit: 'contain', borderRadius: 8 }} />
+            : <><span style={{ fontSize: 24 }}>🐾</span><span style={{ fontSize: 18, fontWeight: 800, color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>{config?.nombre_tienda || 'El Miau'}</span><span style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginLeft: 4 }}>Cat Shop</span></>
           }
         </div>
-        <div style={{ display: 'flex', gap: 24, fontSize: 13, color: '#666' }}>
-          <a href="#productos" style={{ textDecoration: 'none', color: '#666' }}>Productos</a>
-          <a href="#contacto" style={{ textDecoration: 'none', color: '#666' }}>Contacto</a>
+        <div style={{ display: 'flex', gap: 24, fontSize: 14, position: 'relative' }}>
+          <a href="#productos" style={{ textDecoration: 'none', color: '#fff', fontWeight: 600 }}>Productos</a>
+          <a href="#contacto" style={{ textDecoration: 'none', color: '#fff', fontWeight: 600 }}>Contacto</a>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', position: 'relative' }}>
           {waLink && (
             <a href={waLink} target="_blank" rel="noreferrer"
-              style={{ background: '#25D366', color: '#fff', padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+              style={{ background: '#25D366', color: '#fff', padding: '8px 16px', borderRadius: 20, fontSize: 13, fontWeight: 700, textDecoration: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
               💬 WhatsApp
             </a>
           )}
           {totalCarrito > 0 && (
-            <button onClick={() => setVerCarrito(true)} style={{ background: C, color: '#fff', border: 'none', borderRadius: 20, padding: '8px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            <button onClick={() => setVerCarrito(true)} style={{ background: '#fff', color: C, border: 'none', borderRadius: 20, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
               🛒 {totalCarrito}
             </button>
           )}
@@ -168,7 +177,9 @@ export default function PublicCatalogPage({ onIntranet }) {
           </div>
         </div>
         <div style={{ borderRadius: 24, overflow: 'hidden', background: '#FFF3DC', minHeight: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {config?.banner_url
+          {config?.hero_url
+            ? <img src={config.hero_url} alt="El Miau" style={{ width: '100%', height: 300, objectFit: 'cover' }} />
+            : config?.banner_url
             ? <img src={config.banner_url} alt="El Miau" style={{ width: '100%', height: 300, objectFit: 'cover' }} />
             : <span style={{ fontSize: 100 }}>🐱</span>
           }

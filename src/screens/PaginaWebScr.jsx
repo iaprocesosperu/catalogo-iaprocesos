@@ -12,6 +12,8 @@ export default function PaginaWebScr({ emp, notify }) {
   })
   const [bannerFile, setBannerFile] = useState(null)
   const [bannerPrev, setBannerPrev] = useState(null)
+  const [heroFile, setHeroFile] = useState(null)
+  const [heroPrev, setHeroPrev] = useState(null)
   const [logoFile, setLogoFile] = useState(null)
   const [logoPrev, setLogoPrev] = useState(null)
   const [subdominios, setSubdominios] = useState([])
@@ -49,8 +51,10 @@ export default function PaginaWebScr({ emp, notify }) {
       color_secundario: sub.color_secundario || '#2D7D7D'
     })
     setBannerPrev(sub.banner_url || null)
+    setHeroPrev(sub.hero_url || null)
     setLogoPrev(sub.logo_url || null)
     setBannerFile(null)
+    setHeroFile(null)
     setLogoFile(null)
   }
 
@@ -58,6 +62,12 @@ export default function PaginaWebScr({ emp, notify }) {
     const file = e.target.files?.[0]; if (!file) return
     setBannerFile(file)
     const r = new FileReader(); r.onload = ev => setBannerPrev(ev.target.result); r.readAsDataURL(file)
+  }
+
+  const onHero = e => {
+    const file = e.target.files?.[0]; if (!file) return
+    setHeroFile(file)
+    const r = new FileReader(); r.onload = ev => setHeroPrev(ev.target.result); r.readAsDataURL(file)
   }
 
   const onLogo = e => {
@@ -74,6 +84,10 @@ export default function PaginaWebScr({ emp, notify }) {
       if (bannerFile) {
         const blob = await comprimirImagen(bannerFile, 1200)
         updates.banner_url = await subirFoto(blob, `banner_${subSel.subdominio}`)
+      }
+      if (heroFile) {
+        const blob = await comprimirImagen(heroFile, 1200)
+        updates.hero_url = await subirFoto(blob, `hero_${subSel.subdominio}`)
       }
       if (logoFile) {
         const blob = await comprimirImagen(logoFile, 400)
@@ -131,13 +145,35 @@ export default function PaginaWebScr({ emp, notify }) {
               </div>
             </div>
 
-            {/* BANNER */}
+            {/* BANNER NAV */}
             <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, border: '1px solid ' + G.border }}>
-              <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 12px' }}>🖼️ Banner principal</p>
+              <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 4px' }}>🎨 Imagen de fondo del menú superior</p>
+              <p style={{ fontSize: 11, color: G.muted, margin: '0 0 12px' }}>Imagen decorativa que aparece de fondo en la barra de navegación (ancha, ej: huellas de gato)</p>
               {bannerPrev ? (
                 <div style={{ position: 'relative', marginBottom: 10 }}>
-                  <img src={bannerPrev} alt="" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 10 }} />
+                  <img src={bannerPrev} alt="" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 10 }} />
                   <button onClick={() => { setBannerFile(null); setBannerPrev(null) }}
+                    style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}>
+                    Quitar
+                  </button>
+                </div>
+              ) : (
+                <label style={{ display: 'block', padding: 16, borderRadius: 10, border: '2px dashed ' + G.gold, background: G.goldLt, textAlign: 'center', cursor: 'pointer', marginBottom: 10 }}>
+                  <span style={{ fontSize: 24, display: 'block', marginBottom: 4 }}>🐾</span>
+                  <span style={{ fontSize: 13, color: G.gold, fontWeight: 600 }}>Subir imagen de fondo del menú</span>
+                  <input type="file" accept="image/*" onChange={onBanner} style={{ display: 'none' }} />
+                </label>
+              )}
+            </div>
+
+            {/* FOTO HERO */}
+            <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, border: '1px solid ' + G.border }}>
+              <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 4px' }}>🐱 Foto principal (hero)</p>
+              <p style={{ fontSize: 11, color: G.muted, margin: '0 0 12px' }}>Foto grande que aparece al lado del título en la página de inicio (ej: foto de tus gatos)</p>
+              {heroPrev ? (
+                <div style={{ position: 'relative', marginBottom: 10 }}>
+                  <img src={heroPrev} alt="" style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 10 }} />
+                  <button onClick={() => { setHeroFile(null); setHeroPrev(null) }}
                     style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}>
                     Quitar
                   </button>
@@ -145,8 +181,8 @@ export default function PaginaWebScr({ emp, notify }) {
               ) : (
                 <label style={{ display: 'block', padding: 20, borderRadius: 10, border: '2px dashed ' + G.gold, background: G.goldLt, textAlign: 'center', cursor: 'pointer', marginBottom: 10 }}>
                   <span style={{ fontSize: 28, display: 'block', marginBottom: 4 }}>📷</span>
-                  <span style={{ fontSize: 13, color: G.gold, fontWeight: 600 }}>Subir banner (imagen ancha)</span>
-                  <input type="file" accept="image/*" onChange={onBanner} style={{ display: 'none' }} />
+                  <span style={{ fontSize: 13, color: G.gold, fontWeight: 600 }}>Subir foto principal</span>
+                  <input type="file" accept="image/*" onChange={onHero} style={{ display: 'none' }} />
                 </label>
               )}
             </div>
