@@ -49,6 +49,8 @@ export default function PublicCatalogPage({ onIntranet }) {
       document.title = `${config.nombre_tienda} — Cat Shop`
     }
   }, [config])
+
+  const C = config?.color_primario || '#F5A623'
   const C2 = config?.color_secundario || '#2D7D7D'
   const totalCarrito = carrito.reduce((s, i) => s + i.cantidad, 0)
   const totalPrecio = carrito.reduce((s, i) => s + i.precio_venta * i.cantidad, 0)
