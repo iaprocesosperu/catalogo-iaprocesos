@@ -153,46 +153,59 @@ export default function PublicCatalogPage({ onIntranet }) {
       </nav>
 
       {/* HERO */}
-      <section style={{ background: '#FFFDF5', padding: '72px 5% 64px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center', maxWidth: 1100, margin: '0 auto' }}>
-        <div>
-          <span style={{ background: '#FFF3DC', color: '#B86B00', fontSize: 12, padding: '4px 12px', borderRadius: 20, fontWeight: 600 }}>
-            🚚 {config?.slogan || 'Delivery gratis a Marcona'}
-          </span>
-          <h1 style={{ fontSize: 44, fontWeight: 800, lineHeight: 1.12, margin: '18px 0 16px', letterSpacing: -1 }}>
-            Lo mejor para<br/><span style={{ color: C }}>tu gato,</span><br/>a tu puerta
-          </h1>
-          <p style={{ fontSize: 16, color: '#666', lineHeight: 1.7, margin: '0 0 32px', maxWidth: 420 }}>
-            Arena, alimento y accesorios de calidad. Pide hoy y recíbelo en Marcona sin costo adicional.
-          </p>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <a href="#productos" style={{ background: C, color: '#fff', padding: '13px 28px', borderRadius: 10, fontWeight: 700, textDecoration: 'none', fontSize: 15 }}>
-              Ver productos
-            </a>
-            {waLink && (
-              <a href={waLink} target="_blank" rel="noreferrer"
-                style={{ background: 'transparent', color: C, border: `2px solid ${C}`, padding: '11px 24px', borderRadius: 10, fontWeight: 600, textDecoration: 'none', fontSize: 15 }}>
-                💬 {config?.whatsapp || 'Contactar'}
-              </a>
-            )}
-          </div>
-        </div>
-        <div style={{ borderRadius: 24, overflow: 'hidden', background: '#FFF3DC', minHeight: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {config?.hero_url
-            ? <img src={config.hero_url} alt="El Miau" style={{ width: '100%', height: 300, objectFit: 'cover' }} />
-            : config?.banner_url
-            ? <img src={config.banner_url} alt="El Miau" style={{ width: '100%', height: 300, objectFit: 'cover' }} />
-            : <span style={{ fontSize: 100 }}>🐱</span>
+      <section style={{ background: '#FFFDF5', padding: 'clamp(32px, 5vw, 72px) 5% clamp(32px, 5vw, 64px)' }}>
+        <style>{`
+          .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; max-width: 1100px; margin: 0 auto; }
+          .hero-img { border-radius: 24px; overflow: hidden; background: #FFF3DC; min-height: 280px; display: flex; align-items: center; justify-content: center; order: 2; }
+          .hero-txt { order: 1; }
+          @media (max-width: 700px) {
+            .hero-grid { grid-template-columns: 1fr; gap: 24px; }
+            .hero-img { min-height: 220px; order: 1; }
+            .hero-txt { order: 2; }
           }
+        `}</style>
+        <div className="hero-grid">
+          <div className="hero-txt">
+            <span style={{ background: '#FFF3DC', color: '#B86B00', fontSize: 12, padding: '4px 12px', borderRadius: 20, fontWeight: 600 }}>
+              🚚 {config?.slogan || 'Delivery gratis a Marcona'}
+            </span>
+            <h1 style={{ fontSize: 'clamp(32px, 5vw, 44px)', fontWeight: 800, lineHeight: 1.12, margin: '18px 0 16px', letterSpacing: -1 }}>
+              Lo mejor para<br/><span style={{ color: C }}>tu gato,</span><br/>a tu puerta
+            </h1>
+            <p style={{ fontSize: 16, color: '#666', lineHeight: 1.7, margin: '0 0 32px', maxWidth: 420 }}>
+              Arena, alimento y accesorios de calidad. Pide hoy y recíbelo en Marcona sin costo adicional.
+            </p>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <a href="#productos" style={{ background: C, color: '#fff', padding: '13px 28px', borderRadius: 10, fontWeight: 700, textDecoration: 'none', fontSize: 15 }}>
+                Ver productos
+              </a>
+              {waLink && (
+                <a href={waLink} target="_blank" rel="noreferrer"
+                  style={{ background: 'transparent', color: C, border: `2px solid ${C}`, padding: '11px 24px', borderRadius: 10, fontWeight: 600, textDecoration: 'none', fontSize: 15 }}>
+                  💬 {config?.whatsapp || 'Contactar'}
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="hero-img">
+            {config?.hero_url
+              ? <img src={config.hero_url} alt="El Miau" style={{ width: '100%', height: '100%', minHeight: 220, objectFit: 'cover' }} />
+              : config?.banner_url
+              ? <img src={config.banner_url} alt="El Miau" style={{ width: '100%', height: '100%', minHeight: 220, objectFit: 'cover' }} />
+              : <span style={{ fontSize: 100 }}>🐱</span>
+            }
+          </div>
         </div>
       </section>
 
       {/* BENEFICIOS */}
       <section style={{ borderTop: '1px solid #F0F0F0', borderBottom: '1px solid #F0F0F0', background: '#fff' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 5%', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <style>{`.ben-grid { display: grid; grid-template-columns: repeat(4,1fr); max-width:1100px; margin:0 auto; padding:0 5%; } @media(max-width:700px){.ben-grid{grid-template-columns:repeat(2,1fr);}}`}</style>
+        <div className="ben-grid">
           {BENEFICIOS.map((b, i) => (
-            <div key={i} style={{ textAlign: 'center', padding: '32px 16px', borderRight: i < 3 ? '1px solid #F0F0F0' : 'none' }}>
-              <p style={{ fontSize: 30, margin: '0 0 10px' }}>{b.i}</p>
-              <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 4px' }}>{b.t}</p>
+            <div key={i} style={{ textAlign: 'center', padding: '28px 12px', borderRight: i % 2 !== 1 && i < 3 ? '1px solid #F0F0F0' : 'none', borderBottom: i < 2 ? '1px solid #F0F0F0' : 'none' }}>
+              <p style={{ fontSize: 28, margin: '0 0 8px' }}>{b.i}</p>
+              <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 4px' }}>{b.t}</p>
               <p style={{ fontSize: 12, color: '#999', margin: 0 }}>{b.s}</p>
             </div>
           ))}
