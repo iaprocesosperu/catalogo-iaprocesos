@@ -12,6 +12,8 @@ export function SubMenu(P) {
     { id: 'lineas', i: '📏', l: 'Líneas', d: 'Ropa, Gatos...' },
     { id: 'categorias', i: '🏷️', l: 'Categorías', d: 'Por línea activa' },
     { id: 'origenes', i: '📋', l: 'Orígenes', d: 'Fardos, entregas' },
+    { id: 'proveedores', i: '🏷️', l: 'Proveedores', d: 'Betsy, Nina...' },
+    { id: 'reporteOrigenes', i: '📈', l: 'Reporte Orígenes', d: 'Inversión por proveedor' },
     { id: 'colores', i: '🎨', l: 'Colores', d: 'Maestro de colores' },
     { id: 'listaTallas', i: '📐', l: 'Listas de Tallas', d: 'Mis listas de tallas' },
     { id: 'secciones', i: '🗂️', l: 'Secciones', d: 'Zonas de la tienda' },
@@ -319,10 +321,11 @@ function OrigenDetalle({ origen, eid, onClose }) {
 export function OrigenesScr(P) {
   const { eid, lid, tit, oris, notify, loadAll, setScr } = P
   const [showAdd, setShowAdd] = useState(false)
-  const [f, setF] = useState({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg' })
+  const [f, setF] = useState({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg', proveedor_id: '' })
   const [editId, setEditId] = useState(null)
   const [detalleOrigen, setDetalleOrigen] = useState(null)
   const [usados, setUsados] = useState({})
+  const [proveedores, setProveedores] = useState([])
   const formRef = useRef(null)
   const s = (k, v) => setF(p => ({ ...p, [k]: v }))
   const invCalc = parseFloat(f.cantidad || 0) * parseFloat(f.precio_costo_defecto || 0)
@@ -336,16 +339,24 @@ export function OrigenesScr(P) {
     cargarUsados()
   }, [oris])
 
+  useEffect(() => {
+    const cargarProv = async () => {
+      const { data } = await supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre')
+      if (data) setProveedores(data)
+    }
+    if (eid) cargarProv()
+  }, [eid])
+
   const guardar = async () => {
     if (!f.nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
-    const data = { empresa_id: eid, linea_id: lid, nombre: f.nombre.trim(), cantidad: parseInt(f.cantidad) || 0, precio_costo_defecto: f.precio_costo_defecto !== '' ? parseFloat(f.precio_costo_defecto) : null, precio_venta_defecto: f.precio_venta_defecto !== '' ? parseFloat(f.precio_venta_defecto) : null, fecha: f.fecha || null, observaciones: f.observaciones || null, es_granel: f.es_granel, unidad_base: f.es_granel ? (f.unidad_base || 'kg') : null, stock_granel: f.es_granel ? (parseFloat(f.cantidad) || 0) : null }
+    const data = { empresa_id: eid, linea_id: lid, nombre: f.nombre.trim(), cantidad: parseInt(f.cantidad) || 0, precio_costo_defecto: f.precio_costo_defecto !== '' ? parseFloat(f.precio_costo_defecto) : null, precio_venta_defecto: f.precio_venta_defecto !== '' ? parseFloat(f.precio_venta_defecto) : null, fecha: f.fecha || null, observaciones: f.observaciones || null, es_granel: f.es_granel, unidad_base: f.es_granel ? (f.unidad_base || 'kg') : null, stock_granel: f.es_granel ? (parseFloat(f.cantidad) || 0) : null, proveedor_id: f.proveedor_id !== '' ? parseInt(f.proveedor_id) : null }
     if (editId) { await supabase.from('origenes').update(data).eq('id', editId); notify('Actualizado') }
     else { await supabase.from('origenes').insert({ ...data, estado: 'activo' }); notify('Agregado') }
-    setShowAdd(false); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg' }); await loadAll()
+    setShowAdd(false); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg', proveedor_id: '' }); await loadAll()
   }
 
   const editar = o => {
-    setEditId(o.id); setF({ nombre: o.nombre || '', cantidad: String(o.cantidad || ''), precio_costo_defecto: o.precio_costo_defecto != null ? String(o.precio_costo_defecto) : '', precio_venta_defecto: o.precio_venta_defecto != null ? String(o.precio_venta_defecto) : '', fecha: o.fecha || '', observaciones: o.observaciones || '', es_granel: o.es_granel || false, unidad_base: o.unidad_base || 'kg' })
+    setEditId(o.id); setF({ nombre: o.nombre || '', cantidad: String(o.cantidad || ''), precio_costo_defecto: o.precio_costo_defecto != null ? String(o.precio_costo_defecto) : '', precio_venta_defecto: o.precio_venta_defecto != null ? String(o.precio_venta_defecto) : '', fecha: o.fecha || '', observaciones: o.observaciones || '', es_granel: o.es_granel || false, unidad_base: o.unidad_base || 'kg', proveedor_id: o.proveedor_id != null ? String(o.proveedor_id) : '' })
     setShowAdd(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
@@ -373,7 +384,7 @@ export function OrigenesScr(P) {
             <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, margin: 0 }}>+S/{(totalVenta - totalInv).toFixed(0)} ganancia</p>
           </div>
         </div>
-        <button onClick={() => { setShowAdd(!showAdd); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '' }); if (!showAdd) setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }}
+        <button onClick={() => { setShowAdd(!showAdd); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg', proveedor_id: '' }); if (!showAdd) setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }}
           style={{ width: '100%', padding: 12, borderRadius: 8, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', color: G.gold, fontWeight: 700, fontSize: 13, marginBottom: 12 }}>
           ➕ Nuevo origen
         </button>
@@ -390,6 +401,11 @@ export function OrigenesScr(P) {
                 <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Precio Venta (S/)</label><input value={f.precio_venta_defecto} onChange={e => s('precio_venta_defecto', e.target.value)} type="number" placeholder="15" style={iS(G)} /></div>
                 <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Fecha</label><input value={f.fecha} onChange={e => s('fecha', e.target.value)} type="date" style={iS(G)} /></div>
               </div>
+              <label style={{ fontSize: 11, color: G.muted }}>Proveedor</label>
+              <select value={f.proveedor_id} onChange={e => s('proveedor_id', e.target.value)} style={iS(G)}>
+                <option value="">— Sin proveedor —</option>
+                {proveedores.map(pv => <option key={pv.id} value={pv.id}>{pv.nombre}</option>)}
+              </select>
               {invCalc > 0 && (<div style={{ background: G.goldLt, borderRadius: 8, padding: 10, marginBottom: 8, textAlign: 'center' }}><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>Inversión calculada</p><p style={{ fontSize: 18, fontWeight: 800, color: G.gold, margin: 0 }}>S/ {invCalc.toFixed(2)}</p><p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{f.cantidad} items × S/{f.precio_costo_defecto}</p></div>)}
               <label style={{ fontSize: 11, color: G.muted }}>Observaciones</label>
               <textarea value={f.observaciones} onChange={e => s('observaciones', e.target.value)} rows={2} style={{ ...iS(G), resize: 'vertical' }} />
@@ -444,6 +460,7 @@ export function OrigenesScr(P) {
                       {o.cantidad > 0 ? <span style={{ fontWeight: 600, color: pct >= 1 ? G.err : pct >= 0.8 ? G.warn : G.text }}>{usadosCount}/{o.cantidad} usados</span> : <span>{usadosCount} registrados</span>}
                       {o.precio_costo_defecto ? ' • C: S/' + o.precio_costo_defecto : ''}{o.precio_venta_defecto ? ' V: S/' + o.precio_venta_defecto : ''}{o.cantidad && o.precio_costo_defecto ? ' • Inv: S/' + (o.cantidad * o.precio_costo_defecto).toFixed(0) : ''}{o.fecha ? ' • ' + o.fecha : ''}
                     </p>
+                    {o.proveedor_id && <p style={{ fontSize: 9, color: G.gold, margin: '1px 0 0', fontWeight: 700 }}>🏷️ {proveedores.find(pv => pv.id === o.proveedor_id)?.nombre || ''}</p>}
                     {o.observaciones && <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>{o.observaciones}</p>}
                     <p style={{ fontSize: 9, color: G.gold, margin: '2px 0 0' }}>👆 Toca para ver detalle</p>
                   </div>
@@ -1646,6 +1663,247 @@ ${url}`, url })
               style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 14, cursor: 'pointer' }}>
               Ver mis promociones
             </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ═══ PROVEEDORES (mantenimiento) ═══ */
+export function ProveedoresScr(P) {
+  const { eid, tit, notify, setScr } = P
+  const [lista, setLista] = useState([])
+  const [showAdd, setShowAdd] = useState(false)
+  const [editId, setEditId] = useState(null)
+  const [nombre, setNombre] = useState('')
+  const formRef = useRef(null)
+
+  const cargar = async () => {
+    const { data } = await supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre')
+    if (data) setLista(data)
+  }
+  useEffect(() => { if (eid) cargar() }, [eid])
+
+  const abrir = (p) => {
+    if (p) { setEditId(p.id); setNombre(p.nombre) }
+    else { setEditId(null); setNombre('') }
+    setShowAdd(true)
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
+
+  const guardar = async () => {
+    if (!nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
+    if (editId) {
+      const { error } = await supabase.from('proveedores').update({ nombre: nombre.trim() }).eq('id', editId)
+      if (error) { notify('Error: ' + error.message, 'error'); return }
+      notify('Actualizado')
+    } else {
+      const { error } = await supabase.from('proveedores').insert({ empresa_id: eid, nombre: nombre.trim() })
+      if (error) { notify('Error: ' + error.message, 'error'); return }
+      notify('Agregado')
+    }
+    setShowAdd(false); setEditId(null); setNombre(''); await cargar()
+  }
+
+  const eliminar = async (id) => {
+    if (!confirm('¿Eliminar proveedor?')) return
+    await supabase.from('proveedores').update({ activo: false }).eq('id', id)
+    notify('Eliminado'); await cargar()
+  }
+
+  return (
+    <div>
+      <Hdr tit={tit} sec="🏷️ Proveedores" onBack={() => setScr('submenu')} />
+      <div style={{ padding: 16 }}>
+        <button onClick={() => showAdd ? (setShowAdd(false), setEditId(null), setNombre('')) : abrir(null)}
+          style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>
+          {showAdd ? '✕ Cancelar' : '➕ Nuevo proveedor'}
+        </button>
+        {showAdd && (
+          <div ref={formRef}>
+            <Crd title={editId ? 'Editar proveedor' : 'Nuevo proveedor'}>
+              <label style={{ fontSize: 11, color: G.muted }}>Nombre *</label>
+              <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Betsy" style={iS(G)} />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button onClick={guardar} style={{ flex: 1, padding: 12, borderRadius: 8, border: 'none', background: G.ok, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>💾 Guardar</button>
+                <button onClick={() => { setShowAdd(false); setEditId(null); setNombre('') }} style={{ flex: 1, padding: 12, borderRadius: 8, border: '1px solid ' + G.border, background: '#fff', color: G.text, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
+              </div>
+            </Crd>
+          </div>
+        )}
+        {lista.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 30, color: G.muted }}>Sin proveedores. Agrega el primero.</div>
+        ) : lista.map(p => (
+          <div key={p.id} style={{ background: '#fff', borderRadius: 10, padding: 12, border: '1px solid ' + G.border, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: G.text }}>🏷️ {p.nombre}</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button onClick={() => abrir(p)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid ' + G.border, background: G.goldLt, color: G.goldDk, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
+              <button onClick={() => eliminar(p.id)} style={{ padding: '6px 10px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 12, cursor: 'pointer' }}>🗑️</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ═══ REPORTE DE ORÍGENES (con filtro por proveedor + export Excel) ═══ */
+export function ReporteOrigenesScr(P) {
+  const { eid, tit, notify, setScr } = P
+  const [rows, setRows] = useState([])
+  const [proveedores, setProveedores] = useState([])
+  const [filtro, setFiltro] = useState([]) // ids de proveedores seleccionados; [] = todos
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const cargar = async () => {
+      setLoading(true)
+      const [prov, oris, prods, vtas] = await Promise.all([
+        supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre'),
+        supabase.from('origenes').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre'),
+        supabase.from('productos').select('id,origen_id,cantidad,precio_costo').eq('empresa_id', eid).eq('activo', true),
+        supabase.from('ventas').select('producto_id,cantidad,total,precio_costo,precio_venta_real').eq('empresa_id', eid)
+      ])
+      setProveedores(prov.data || [])
+      const P2 = prov.data || [], O = oris.data || [], PR = prods.data || [], V = vtas.data || []
+      // map producto_id -> origen_id
+      const prodOrigen = {}; PR.forEach(p => { prodOrigen[p.id] = p.origen_id })
+      // agregados por origen desde productos
+      const regByOri = {}; PR.forEach(p => {
+        const o = regByOri[p.origen_id] || { unidades: 0, inv: 0, count: 0 }
+        o.unidades += (p.cantidad || 0); o.inv += (p.precio_costo || 0) * (p.cantidad || 0); o.count += 1
+        regByOri[p.origen_id] = o
+      })
+      // agregados por origen desde ventas
+      const venByOri = {}; V.forEach(v => {
+        const oid = prodOrigen[v.producto_id]; if (!oid) return
+        const o = venByOri[oid] || { und: 0, soles: 0, costo: 0 }
+        o.und += (v.cantidad || 0); o.soles += (v.total || 0); o.costo += (v.precio_costo || 0) * (v.cantidad || 0)
+        venByOri[oid] = o
+      })
+      const provName = {}; P2.forEach(p => { provName[p.id] = p.nombre })
+      const out = O.map(o => {
+        const reg = regByOri[o.id] || { unidades: 0, inv: 0, count: 0 }
+        const ven = venByOri[o.id] || { und: 0, soles: 0, costo: 0 }
+        return {
+          origen: o.nombre,
+          proveedor_id: o.proveedor_id || null,
+          proveedor: o.proveedor_id ? (provName[o.proveedor_id] || '') : '',
+          und_declaradas: o.cantidad || 0,
+          und_registradas: reg.unidades,
+          costo_unit: o.precio_costo_defecto ?? '',
+          inv_declarada: (o.cantidad || 0) * (o.precio_costo_defecto || 0),
+          und_vendidas: ven.und,
+          vendido_soles: ven.soles,
+          costo_recuperado: ven.costo
+        }
+      })
+      setRows(out)
+      setLoading(false)
+    }
+    if (eid) cargar()
+  }, [eid])
+
+  const toggleFiltro = (id) => {
+    setFiltro(f => f.includes(id) ? f.filter(x => x !== id) : [...f, id])
+  }
+
+  const visibles = filtro.length === 0 ? rows : rows.filter(r => filtro.includes(r.proveedor_id))
+  const tot = visibles.reduce((a, r) => ({
+    und_declaradas: a.und_declaradas + r.und_declaradas,
+    und_registradas: a.und_registradas + r.und_registradas,
+    inv_declarada: a.inv_declarada + r.inv_declarada,
+    und_vendidas: a.und_vendidas + r.und_vendidas,
+    vendido_soles: a.vendido_soles + r.vendido_soles,
+    costo_recuperado: a.costo_recuperado + r.costo_recuperado
+  }), { und_declaradas: 0, und_registradas: 0, inv_declarada: 0, und_vendidas: 0, vendido_soles: 0, costo_recuperado: 0 })
+
+  const exportar = () => {
+    const aoa = [['Origen', 'Proveedor', 'Und declaradas', 'Und registradas', 'Costo unit', 'Inversion declarada', 'Und vendidas', 'Vendido S/', 'Costo recuperado']]
+    visibles.forEach(r => aoa.push([r.origen, r.proveedor, r.und_declaradas, r.und_registradas, r.costo_unit, r.inv_declarada, r.und_vendidas, r.vendido_soles, r.costo_recuperado]))
+    aoa.push(['TOTAL', '', tot.und_declaradas, tot.und_registradas, '', tot.inv_declarada, tot.und_vendidas, tot.vendido_soles, tot.costo_recuperado])
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Reporte Origenes')
+    XLSX.writeFile(wb, 'reporte_origenes_' + new Date().toISOString().split('T')[0] + '.xlsx')
+    notify('Exportado')
+  }
+
+  const tdS = { padding: '6px 8px', fontSize: 11, borderBottom: '1px solid ' + G.border, whiteSpace: 'nowrap' }
+  const thS = { padding: '6px 8px', fontSize: 10, fontWeight: 700, textAlign: 'left', color: G.muted, borderBottom: '2px solid ' + G.border, whiteSpace: 'nowrap' }
+  const num = { textAlign: 'right' }
+
+  return (
+    <div>
+      <Hdr tit={tit} sec="📈 Reporte de Orígenes" onBack={() => setScr('submenu')} />
+      <div style={{ padding: 16 }}>
+        {/* Filtro de proveedores */}
+        <div style={{ marginBottom: 12 }}>
+          <p style={{ fontSize: 11, color: G.muted, margin: '0 0 6px' }}>Filtrar por proveedor (ninguno = todos):</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {proveedores.map(pv => {
+              const on = filtro.includes(pv.id)
+              return (
+                <button key={pv.id} onClick={() => toggleFiltro(pv.id)}
+                  style={{ padding: '5px 12px', borderRadius: 16, border: '1px solid ' + (on ? G.gold : G.border), background: on ? G.gold : '#fff', color: on ? '#fff' : G.text, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  {on ? '✓ ' : ''}{pv.nombre}
+                </button>
+              )
+            })}
+            {filtro.length > 0 && <button onClick={() => setFiltro([])} style={{ padding: '5px 12px', borderRadius: 16, border: '1px solid ' + G.border, background: '#fff', color: G.err, fontSize: 12, cursor: 'pointer' }}>Limpiar</button>}
+          </div>
+        </div>
+
+        <button onClick={exportar} style={{ width: '100%', padding: 10, borderRadius: 8, border: 'none', background: G.ok, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>📥 Exportar Excel</button>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 30, color: G.muted }}>Cargando...</div>
+        ) : (
+          <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 10, border: '1px solid ' + G.border }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 720 }}>
+              <thead>
+                <tr>
+                  <th style={thS}>Origen</th>
+                  <th style={thS}>Proveedor</th>
+                  <th style={{ ...thS, ...num }}>Und decl.</th>
+                  <th style={{ ...thS, ...num }}>Und reg.</th>
+                  <th style={{ ...thS, ...num }}>Costo u.</th>
+                  <th style={{ ...thS, ...num }}>Inv. decl.</th>
+                  <th style={{ ...thS, ...num }}>Und vend.</th>
+                  <th style={{ ...thS, ...num }}>Vendido S/</th>
+                  <th style={{ ...thS, ...num }}>Costo rec.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibles.map((r, i) => (
+                  <tr key={i}>
+                    <td style={tdS}>{r.origen}</td>
+                    <td style={tdS}>{r.proveedor || '—'}</td>
+                    <td style={{ ...tdS, ...num }}>{r.und_declaradas}</td>
+                    <td style={{ ...tdS, ...num }}>{r.und_registradas}</td>
+                    <td style={{ ...tdS, ...num }}>{r.costo_unit !== '' ? r.costo_unit : '—'}</td>
+                    <td style={{ ...tdS, ...num }}>{r.inv_declarada.toFixed(1)}</td>
+                    <td style={{ ...tdS, ...num }}>{r.und_vendidas}</td>
+                    <td style={{ ...tdS, ...num }}>{r.vendido_soles.toFixed(1)}</td>
+                    <td style={{ ...tdS, ...num }}>{r.costo_recuperado.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: G.goldLt, fontWeight: 800 }}>
+                  <td style={{ ...tdS, fontWeight: 800 }}>TOTAL</td>
+                  <td style={tdS}></td>
+                  <td style={{ ...tdS, ...num, fontWeight: 800 }}>{tot.und_declaradas}</td>
+                  <td style={{ ...tdS, ...num, fontWeight: 800 }}>{tot.und_registradas}</td>
+                  <td style={tdS}></td>
+                  <td style={{ ...tdS, ...num, fontWeight: 800 }}>{tot.inv_declarada.toFixed(1)}</td>
+                  <td style={{ ...tdS, ...num, fontWeight: 800 }}>{tot.und_vendidas}</td>
+                  <td style={{ ...tdS, ...num, fontWeight: 800 }}>{tot.vendido_soles.toFixed(1)}</td>
+                  <td style={{ ...tdS, ...num, fontWeight: 800 }}>{tot.costo_recuperado.toFixed(1)}</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
       </div>

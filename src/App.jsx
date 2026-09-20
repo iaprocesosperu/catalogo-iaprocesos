@@ -6,7 +6,7 @@ import CatalogoScreen from './screens/CatalogoScreen'
 import RegistrarScreen from './screens/RegistrarScreen'
 import BuscarScreen from './screens/BuscarScreen'
 import VentaScreen from './screens/VentaScreen'
-import { SubMenu, OrigenesScr, CatsScr, MantScr, ClientesScr, StockScr, HistorialScr, ListasTallasScr, SeccionesScr, PedidosScr, InventarioScr, ConciliacionScr, MarketingScr, PromoCreatorScr } from './screens/OtrasScreens'
+import { SubMenu, OrigenesScr, CatsScr, MantScr, ClientesScr, StockScr, HistorialScr, ListasTallasScr, SeccionesScr, PedidosScr, InventarioScr, ConciliacionScr, MarketingScr, PromoCreatorScr, ProveedoresScr, ReporteOrigenesScr } from './screens/OtrasScreens'
 import PublicProductPage from './screens/PublicProductPage'
 import PublicCatalogPage from './screens/PublicCatalogPage'
 import PaginaWebScr from './screens/PaginaWebScr'
@@ -153,6 +153,8 @@ export default function App() {
           {scr === 'lineas'      && <MantScr tipo="lineas" data={lineas} {...P} />}
           {scr === 'categorias'  && <CatsScr {...P} />}
           {scr === 'origenes'    && <OrigenesScr {...P} />}
+          {scr === 'proveedores' && <ProveedoresScr {...P} />}
+          {scr === 'reporteOrigenes' && <ReporteOrigenesScr {...P} />}
           {scr === 'colores'     && <MantScr tipo="colores" data={cols} {...P} />}
           {scr === 'clientes'    && <ClientesScr {...P} />}
           {scr === 'stock'       && <StockScr {...P} />}
@@ -187,6 +189,8 @@ export default function App() {
       {scr === 'lineas'      && <MantScr tipo="lineas" data={lineas} {...P} />}
       {scr === 'categorias'  && <CatsScr {...P} />}
       {scr === 'origenes'    && <OrigenesScr {...P} />}
+      {scr === 'proveedores' && <ProveedoresScr {...P} />}
+      {scr === 'reporteOrigenes' && <ReporteOrigenesScr {...P} />}
       {scr === 'colores'     && <MantScr tipo="colores" data={cols} {...P} />}
       {scr === 'clientes'    && <ClientesScr {...P} />}
       {scr === 'stock'       && <StockScr {...P} />}
