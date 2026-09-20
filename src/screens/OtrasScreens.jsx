@@ -2036,8 +2036,8 @@ export function ReporteOrigenesScr(P) {
                 <div style={{ padding: 16 }}>
                   <p style={{ textAlign: 'center', fontSize: 12, color: G.muted, margin: '0 0 10px' }}>{popIdx + 1} / {popProds.length}</p>
                   {popProd.foto_url
-                    ? <img src={popProd.foto_url} alt="" style={{ width: '100%', height: 260, objectFit: 'cover', borderRadius: 12 }} />
-                    : <div style={{ width: '100%', height: 260, background: G.goldLt, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 48, opacity: 0.3 }}>📦</span></div>}
+                    ? <img src={popProd.foto_url} alt="" style={{ width: '100%', height: 340, objectFit: 'contain', borderRadius: 12, background: G.goldLt }} />
+                    : <div style={{ width: '100%', height: 340, background: G.goldLt, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 48, opacity: 0.3 }}>📦</span></div>}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
                     <span style={{ fontSize: 11, background: G.goldSf, color: G.goldDk, padding: '3px 8px', borderRadius: 5, fontWeight: 700 }}>{popProd.codigo}</span>
                     <span style={{ fontSize: 18, fontWeight: 900, color: G.gold }}>S/{popProd.precio_venta}</span>
