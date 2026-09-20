@@ -1,15 +1,20 @@
 import { useState } from 'react'
 import { supabase } from '../supabase'
 import { G } from '../constants'
-import { downloadPhoto, exportCSV, generarCatalogoPDF } from '../helpers'
+import { downloadPhoto, exportCSV } from '../helpers'
 import { LineSel } from '../components/index'
 import PhotoViewerModal from '../components/PhotoViewerModal'
 
 export default function CatalogoScreen(P) {
   const { tit, lineas, linAct, setLinAct, prods, setScr, setEditP, setVentaP, logout, notify, loadAll, emp } = P
   const [f, setF] = useState('')
+  const [fOrigen, setFOrigen] = useState('')
   const [viewerProd, setViewerProd] = useState(null)
-  const fl = prods.filter(p => !f || p.nombre?.toLowerCase().includes(f.toLowerCase()) || p.codigo?.toLowerCase().includes(f.toLowerCase()))
+  const origenesDisp = [...new Set(prods.map(p => p.origenes?.nombre).filter(Boolean))].sort()
+  const fl = prods.filter(p =>
+    (!f || p.nombre?.toLowerCase().includes(f.toLowerCase()) || p.codigo?.toLowerCase().includes(f.toLowerCase())) &&
+    (!fOrigen || p.origenes?.nombre === fOrigen)
+  )
 
   const eliminar = async (p) => {
     const { data: v } = await supabase.from('ventas').select('id').eq('producto_id', p.id).limit(1)
@@ -40,13 +45,20 @@ export default function CatalogoScreen(P) {
             <h1 style={{ color: '#fff', fontSize: 18, fontWeight: 800, margin: 0 }}>📦 Catálogo</h1>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => generarCatalogoPDF(fl, emp, linAct?.nombre)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, cursor: 'pointer' }}>📄 PDF</button>
+            <button onClick={loadAll} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, cursor: 'pointer' }}>🔄 Refrescar</button>
             <button onClick={exportar} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, cursor: 'pointer' }}>📥</button>
             <button onClick={logout} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, cursor: 'pointer' }}>Salir</button>
           </div>
         </div>
         <input value={f} onChange={e => setF(e.target.value)} placeholder="Filtrar por nombre, código..."
           style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: 'none', fontSize: 14, background: 'rgba(255,255,255,0.9)', boxSizing: 'border-box' }} />
+        {origenesDisp.length > 0 && (
+          <select value={fOrigen} onChange={e => setFOrigen(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: 'none', fontSize: 14, background: 'rgba(255,255,255,0.9)', boxSizing: 'border-box', marginTop: 8, color: G.text }}>
+            <option value="">📋 Origen: todos</option>
+            {origenesDisp.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )}
       </div>
       <LineSel lineas={lineas} linAct={linAct} setLinAct={setLinAct} />
       <div style={{ padding: '4px 12px 0', fontSize: 12, color: G.muted }}>{fl.length} productos</div>

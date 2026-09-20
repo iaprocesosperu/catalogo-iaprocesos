@@ -1823,10 +1823,10 @@ export function ReporteOrigenesScr(P) {
   const [rows, setRows] = useState([])
   const [proveedores, setProveedores] = useState([])
   const [filtro, setFiltro] = useState([]) // ids de proveedores seleccionados; [] = todos
+  const [filtroOrigen, setFiltroOrigen] = useState('') // nombre de origen; '' = todos
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const cargar = async () => {
+  const cargar = async () => {
       setLoading(true)
       const [prov, oris, prods, vtas] = await Promise.all([
         supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre'),
@@ -1870,15 +1870,19 @@ export function ReporteOrigenesScr(P) {
       })
       setRows(out)
       setLoading(false)
-    }
-    if (eid) cargar()
-  }, [eid])
+  }
+
+  useEffect(() => { if (eid) cargar() }, [eid])
 
   const toggleFiltro = (id) => {
     setFiltro(f => f.includes(id) ? f.filter(x => x !== id) : [...f, id])
   }
 
-  const visibles = filtro.length === 0 ? rows : rows.filter(r => filtro.includes(r.proveedor_id))
+  const origenesDisp = [...new Set(rows.map(r => r.origen).filter(Boolean))].sort()
+  const visibles = rows.filter(r =>
+    (filtro.length === 0 || filtro.includes(r.proveedor_id)) &&
+    (!filtroOrigen || r.origen === filtroOrigen)
+  )
   const tot = visibles.reduce((a, r) => ({
     und_declaradas: a.und_declaradas + r.und_declaradas,
     und_registradas: a.und_registradas + r.und_registradas,
@@ -1907,6 +1911,7 @@ export function ReporteOrigenesScr(P) {
     <div>
       <Hdr tit={tit} sec="📈 Reporte de Orígenes" onBack={() => setScr('submenu')} />
       <div style={{ padding: 16 }}>
+        <button onClick={cargar} disabled={loading} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 13, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>{loading ? '⏳ Cargando...' : '🔄 Refrescar'}</button>
         {/* Filtro de proveedores */}
         <div style={{ marginBottom: 12 }}>
           <p style={{ fontSize: 11, color: G.muted, margin: '0 0 6px' }}>Filtrar por proveedor (ninguno = todos):</p>
@@ -1922,6 +1927,16 @@ export function ReporteOrigenesScr(P) {
             })}
             {filtro.length > 0 && <button onClick={() => setFiltro([])} style={{ padding: '5px 12px', borderRadius: 16, border: '1px solid ' + G.border, background: '#fff', color: G.err, fontSize: 12, cursor: 'pointer' }}>Limpiar</button>}
           </div>
+        </div>
+
+        {/* Filtro por origen */}
+        <div style={{ marginBottom: 12 }}>
+          <p style={{ fontSize: 11, color: G.muted, margin: '0 0 6px' }}>Filtrar por origen:</p>
+          <select value={filtroOrigen} onChange={e => setFiltroOrigen(e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12, background: '#fff', color: G.text }}>
+            <option value="">📋 Todos los orígenes</option>
+            {origenesDisp.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
         </div>
 
         <button onClick={exportar} style={{ width: '100%', padding: 10, borderRadius: 8, border: 'none', background: G.ok, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>📥 Exportar Excel</button>
