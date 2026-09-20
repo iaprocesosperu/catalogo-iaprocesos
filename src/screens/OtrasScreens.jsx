@@ -1819,7 +1819,7 @@ export function ProveedoresScr(P) {
 
 /* ═══ REPORTE DE ORÍGENES (con filtro por proveedor + export Excel) ═══ */
 export function ReporteOrigenesScr(P) {
-  const { eid, tit, notify, setScr, setEditP } = P
+  const { eid, tit, notify, setScr, setEditP, setRetorno } = P
   const [rows, setRows] = useState([])
   const [proveedores, setProveedores] = useState([])
   const [filtro, setFiltro] = useState([]) // ids de proveedores seleccionados; [] = todos
@@ -1904,6 +1904,7 @@ export function ReporteOrigenesScr(P) {
   const popProd = popProds[popIdx]
   const editarEnCatalogo = () => {
     if (!popProd) return
+    if (setRetorno) setRetorno('reporteOrigenes')
     setEditP(popProd); cerrarPop(); setScr('registrar')
   }
   const tot = visibles.reduce((a, r) => ({

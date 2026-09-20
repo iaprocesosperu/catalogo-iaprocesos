@@ -5,7 +5,7 @@ import { blobToBase64, downloadPhoto, detectColor, mejorarFotoConIA } from '../h
 import { CamModal, Hdr, Crd, VoiceBtn } from '../components/index'
 
 export default function RegistrarScreen(P) {
-  const { eid, lid, tit, cats, oris, cols, notify, loadAll, setScr, editP, emp } = P
+  const { eid, lid, tit, cats, oris, cols, notify, loadAll, setScr, editP, emp, retorno, setRetorno } = P
   const ep = editP
 
   const { secciones } = P
@@ -375,7 +375,7 @@ export default function RegistrarScreen(P) {
         setF(p => ({ ...p, codigo: '', nombre: '', color: '', cantidad: '1', observacion: '', atributos: {} }))
         setFotos([]); setFotosEliminadas([])
         if (emp?.codigo_auto) calcAutoCode()
-      } else setScr('catalogo')
+      } else { const dest = retorno || 'catalogo'; if (setRetorno) setRetorno(null); setScr(dest) }
     } catch (e) { notify('Error: ' + e.message, 'error') }
     setSaving(false)
   }
@@ -483,7 +483,7 @@ export default function RegistrarScreen(P) {
     <div>
       <FotoViewerLocal />
       {(cam === 'label' || cam === 'foto') && <CamModal onCapture={onCamCapture} onClose={() => setCam(null)} />}
-      <Hdr tit={tit} sec={ep ? '✏️ Editar' : '➕ Registrar'} onBack={() => setScr('catalogo')} />
+      <Hdr tit={tit} sec={ep ? '✏️ Editar' : '➕ Registrar'} onBack={() => { const dest = retorno || 'catalogo'; if (setRetorno) setRetorno(null); setScr(dest) }} />
       <div style={{ padding: 16 }}>
 
         {/* 1. CÓDIGO */}
