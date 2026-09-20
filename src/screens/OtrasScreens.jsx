@@ -1819,7 +1819,7 @@ export function ProveedoresScr(P) {
 
 /* ═══ REPORTE DE ORÍGENES (con filtro por proveedor + export Excel) ═══ */
 export function ReporteOrigenesScr(P) {
-  const { eid, tit, notify, setScr } = P
+  const { eid, tit, notify, setScr, setEditP } = P
   const [rows, setRows] = useState([])
   const [proveedores, setProveedores] = useState([])
   const [filtro, setFiltro] = useState([]) // ids de proveedores seleccionados; [] = todos
@@ -1856,7 +1856,9 @@ export function ReporteOrigenesScr(P) {
         const reg = regByOri[o.id] || { unidades: 0, inv: 0, count: 0 }
         const ven = venByOri[o.id] || { und: 0, soles: 0, costo: 0 }
         return {
+          origen_id: o.id,
           origen: o.nombre,
+          num_productos: reg.count,
           proveedor_id: o.proveedor_id || null,
           proveedor: o.proveedor_id ? (provName[o.proveedor_id] || '') : '',
           und_declaradas: o.cantidad || 0,
@@ -1883,6 +1885,27 @@ export function ReporteOrigenesScr(P) {
     (filtro.length === 0 || filtro.includes(r.proveedor_id)) &&
     (!filtroOrigen || r.origen === filtroOrigen)
   )
+
+  // ── Popup: productos de un origen ──
+  const [popOrigen, setPopOrigen] = useState(null) // {nombre}
+  const [popProds, setPopProds] = useState([])
+  const [popIdx, setPopIdx] = useState(0)
+  const [popLoad, setPopLoad] = useState(false)
+
+  const abrirOrigen = async (row) => {
+    if (!row.origen_id || !row.num_productos) return
+    setPopOrigen({ nombre: row.origen }); setPopIdx(0); setPopProds([]); setPopLoad(true)
+    const { data } = await supabase.from('productos')
+      .select('id,codigo,nombre,precio_costo,precio_venta,cantidad,color,foto_url,atributos,categoria_id,origen_id,linea_id,seccion_id,empresa_id')
+      .eq('origen_id', row.origen_id).eq('activo', true).order('codigo')
+    setPopProds(data || []); setPopLoad(false)
+  }
+  const cerrarPop = () => { setPopOrigen(null); setPopProds([]); setPopIdx(0) }
+  const popProd = popProds[popIdx]
+  const editarEnCatalogo = () => {
+    if (!popProd) return
+    setEditP(popProd); cerrarPop(); setScr('registrar')
+  }
   const tot = visibles.reduce((a, r) => ({
     und_declaradas: a.und_declaradas + r.und_declaradas,
     und_registradas: a.und_registradas + r.und_registradas,
@@ -1962,7 +1985,9 @@ export function ReporteOrigenesScr(P) {
               <tbody>
                 {visibles.map((r, i) => (
                   <tr key={i}>
-                    <td style={tdS}>{r.origen}</td>
+                    <td style={tdS}>{r.num_productos > 0
+                      ? <span onClick={() => abrirOrigen(r)} style={{ color: G.gold, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>{r.origen}</span>
+                      : r.origen}</td>
                     <td style={tdS}>{r.proveedor || '—'}</td>
                     <td style={{ ...tdS, ...num }}>{r.und_declaradas}</td>
                     <td style={{ ...tdS, ...num }}>{r.und_registradas}</td>
@@ -1988,6 +2013,52 @@ export function ReporteOrigenesScr(P) {
                 </tr>
               </tfoot>
             </table>
+          </div>
+        )}
+
+        {/* Popup: productos del origen */}
+        {popOrigen && (
+          <div onClick={cerrarPop} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 380, maxHeight: '90vh', overflow: 'auto' }}>
+              <div style={{ background: G.gold, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
+                <div>
+                  <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 10, margin: 0 }}>Origen</p>
+                  <p style={{ color: '#fff', fontSize: 15, fontWeight: 800, margin: 0 }}>{popOrigen.nombre}</p>
+                </div>
+                <button onClick={cerrarPop} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 8, width: 30, height: 30, color: '#fff', fontSize: 16, cursor: 'pointer' }}>✕</button>
+              </div>
+
+              {popLoad ? (
+                <div style={{ padding: 40, textAlign: 'center', color: G.muted }}>⏳ Cargando productos...</div>
+              ) : !popProd ? (
+                <div style={{ padding: 40, textAlign: 'center', color: G.muted }}>Sin productos</div>
+              ) : (
+                <div style={{ padding: 16 }}>
+                  <p style={{ textAlign: 'center', fontSize: 12, color: G.muted, margin: '0 0 10px' }}>{popIdx + 1} / {popProds.length}</p>
+                  {popProd.foto_url
+                    ? <img src={popProd.foto_url} alt="" style={{ width: '100%', height: 260, objectFit: 'cover', borderRadius: 12 }} />
+                    : <div style={{ width: '100%', height: 260, background: G.goldLt, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 48, opacity: 0.3 }}>📦</span></div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                    <span style={{ fontSize: 11, background: G.goldSf, color: G.goldDk, padding: '3px 8px', borderRadius: 5, fontWeight: 700 }}>{popProd.codigo}</span>
+                    <span style={{ fontSize: 18, fontWeight: 900, color: G.gold }}>S/{popProd.precio_venta}</span>
+                  </div>
+                  <p style={{ fontSize: 15, fontWeight: 700, margin: '6px 0 2px', color: G.text }}>{popProd.nombre}</p>
+                  <p style={{ fontSize: 12, color: G.muted, margin: 0 }}>
+                    Costo: S/{popProd.precio_costo ?? '—'} • Stock: {popProd.cantidad}
+                    {popProd.color ? ' • ' + popProd.color : ''}
+                    {popProd.atributos?.talla ? ' • T:' + popProd.atributos.talla : ''}
+                  </p>
+
+                  <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                    <button onClick={() => setPopIdx(i => Math.max(0, i - 1))} disabled={popIdx === 0}
+                      style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.border, background: popIdx === 0 ? '#f5f5f5' : '#fff', color: popIdx === 0 ? '#bbb' : G.text, fontSize: 13, fontWeight: 700, cursor: popIdx === 0 ? 'default' : 'pointer' }}>‹ Anterior</button>
+                    <button onClick={() => setPopIdx(i => Math.min(popProds.length - 1, i + 1))} disabled={popIdx >= popProds.length - 1}
+                      style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.border, background: popIdx >= popProds.length - 1 ? '#f5f5f5' : '#fff', color: popIdx >= popProds.length - 1 ? '#bbb' : G.text, fontSize: 13, fontWeight: 700, cursor: popIdx >= popProds.length - 1 ? 'default' : 'pointer' }}>Siguiente ›</button>
+                  </div>
+                  <button onClick={editarEnCatalogo} style={{ width: '100%', padding: 13, marginTop: 8, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>✏️ Editar en catálogo</button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
