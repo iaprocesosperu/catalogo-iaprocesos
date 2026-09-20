@@ -192,3 +192,77 @@ export function generarCatalogoPDF(productos, empresa, linea) {
   w.document.write(html); w.document.close()
   setTimeout(() => w.print(), 900)
 }
+
+// Catálogo PDF en GRILLA — N productos por página (2, 4, 6, 9)
+export function generarCatalogoPDFGrid(productos, empresa, porPagina = 4) {
+  const prods = productos.filter(p => p.cantidad > 0)
+  if (!prods.length) { alert('No hay productos con stock para generar el catálogo'); return }
+
+  const nom = empresa?.nombre || ''
+  const slo = empresa?.slogan || 'Aquí todo es barato'
+  const dir = empresa?.direccion || ''
+  const wa = empresa?.whatsapp || ''
+
+  // columnas según densidad
+  const cols = porPagina <= 2 ? 1 : (porPagina <= 6 ? 2 : 3)
+
+  const cover = `<div class="page cover">
+    <div class="cover-body">
+      <h1 class="cover-title">${nom}</h1>
+      <p class="cover-slogan">${slo}</p>
+      <div class="cover-badge">&#128722; CAT&Aacute;LOGO DE PRODUCTOS</div>
+    </div>
+    <div class="cover-foot">
+      <div class="cf-col"><span class="cf-lbl">DIRECCI&Oacute;N:</span><span>${dir}</span></div>
+      <div class="cf-col cf-right"><span class="cf-lbl">WHATSAPP:</span><span class="cf-wa">${wa}</span></div>
+    </div>
+  </div>`
+
+  // partir en páginas de "porPagina"
+  const chunks = []
+  for (let i = 0; i < prods.length; i += porPagina) chunks.push(prods.slice(i, i + porPagina))
+
+  const pages = chunks.map((chunk, pi) => {
+    const cards = chunk.map((p, idx) => {
+      const num = String(pi * porPagina + idx + 1).padStart(3, '0')
+      const genero = p.atributos?.genero || ''
+      const talla = p.atributos?.talla || ''
+      const color = p.color || ''
+      const subcat = p.categorias?.nombre || ''
+      const tags = [genero && genero.toUpperCase(), talla && ('T: ' + talla), color && color.toUpperCase()].filter(Boolean).join(' &#8226; ')
+      return `<div class="gcard">
+        <div class="gnum">${num}</div>
+        <div class="gphoto">${p.foto_url ? `<img src="${p.foto_url}" alt="">` : '<div class="gnofoto">Sin foto</div>'}</div>
+        <div class="ginfo">
+          <p class="gname">${(p.nombre || '').toUpperCase()}</p>
+          ${subcat ? `<p class="gcat">${subcat.toUpperCase()}</p>` : ''}
+          ${tags ? `<p class="gtags">${tags}</p>` : ''}
+          <p class="gprice">S/${p.precio_venta}</p>
+        </div>
+      </div>`
+    }).join('')
+    return `<div class="page grid-page">
+      <div class="gh"><div class="gh-line"></div><div class="gh-c"><h2>${nom}</h2><p>${slo}</p></div><div class="gh-line"></div></div>
+      <div class="grid" style="grid-template-columns:repeat(${cols},1fr)">${cards}</div>
+      <div class="gfoot"><span class="gf-lbl">DIRECCI&Oacute;N:</span> ${dir} &nbsp;&#8226;&nbsp; <span class="gf-lbl">WHATSAPP:</span> <b>${wa}</b></div>
+    </div>`
+  }).join('')
+
+  const css = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#e0e0e0}@page{size:A4 portrait;margin:0}@media print{body{background:#fff}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.page{margin:0!important;box-shadow:none!important;page-break-after:always;page-break-inside:avoid}}
+  .page{width:210mm;min-height:297mm;background:#fff;display:flex;flex-direction:column;margin:14px auto;box-shadow:0 4px 28px rgba(0,0,0,0.18);overflow:hidden;position:relative}
+  .cover{align-items:center;justify-content:center}.cover-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px}.cover-title{font-size:54px;font-weight:900;color:#C5A55A;text-align:center;text-transform:uppercase;line-height:1.05}.cover-slogan{font-family:Georgia,serif;font-style:italic;font-size:20px;color:#666}.cover-badge{background:#C5A55A;color:#fff;font-size:16px;font-weight:800;padding:11px 28px;border-radius:8px;letter-spacing:0.5px}.cover-foot{background:#1A1A1A;border-top:2.5px solid #C5A55A;display:flex;padding:14px 24px;color:#fff;font-size:10px}.cf-col{flex:1;display:flex;flex-direction:column;gap:2px}.cf-right{align-items:flex-end}.cf-lbl{color:#C5A55A;font-weight:700;font-size:9px}.cf-wa{font-size:16px;font-weight:800}
+  .grid-page{padding:0}.gh{display:flex;align-items:center;padding:12px 20px;gap:12px;border-bottom:2px solid #C5A55A;flex-shrink:0}.gh-line{flex:1;height:1px;background:#C5A55A;opacity:0.5}.gh-c{text-align:center}.gh-c h2{font-size:14px;font-weight:800;color:#C5A55A;text-transform:uppercase}.gh-c p{font-size:8px;color:#999;font-style:italic;font-family:Georgia,serif}
+  .grid{flex:1;display:grid;gap:6mm;padding:8mm}
+  .gcard{border:1px solid #E8E3D8;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;background:#fff;position:relative}
+  .gnum{position:absolute;top:0;left:0;background:#C5A55A;color:#fff;font-size:11px;font-weight:800;padding:3px 9px;letter-spacing:1px;z-index:2}
+  .gphoto{flex:1;background:#F9F5EB;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0}
+  .gphoto img{width:100%;height:100%;object-fit:cover}.gnofoto{color:#C5A55A;opacity:0.4;font-size:12px;font-weight:700}
+  .ginfo{padding:8px 10px;background:#fff;flex-shrink:0}.gname{font-size:13px;font-weight:800;color:#1F2937;text-transform:uppercase;line-height:1.15}.gcat{font-size:9px;font-weight:700;color:#C5A55A;margin-top:1px;text-transform:uppercase}.gtags{font-size:9px;color:#6B7280;margin-top:2px}.gprice{font-size:20px;font-weight:900;color:#C5A55A;margin-top:3px}
+  .gfoot{background:#1A1A1A;color:#fff;font-size:9px;text-align:center;padding:8px;flex-shrink:0}.gf-lbl{color:#C5A55A;font-weight:700}`
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Catálogo ${nom}</title><style>${css}</style></head><body>${cover}${pages}</body></html>`
+  const w = window.open('', '_blank')
+  if (!w) { alert('Permite ventanas emergentes para generar el PDF'); return }
+  w.document.write(html); w.document.close()
+  setTimeout(() => w.print(), 900)
+}

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../supabase'
 import { G, iS } from '../constants'
-import { exportCSV } from '../helpers'
+import { exportCSV, generarCatalogoPDF, generarCatalogoPDFGrid } from '../helpers'
 import { Hdr, Crd, VoiceBtn } from '../components/index'
 
 /* ═══ SUBMENÚ ═══ */
@@ -1493,6 +1493,14 @@ export function PromoCreatorScr(P) {
   const [guardando, setGuardando] = useState(false)
   const [misPromos, setMisPromos] = useState([])
   const [vista, setVista] = useState('lista') // lista | crear
+  // filtros del armador
+  const [fCat, setFCat] = useState('')
+  const [fTalla, setFTalla] = useState('')
+  const [fColor, setFColor] = useState('')
+  const [fGenero, setFGenero] = useState('')
+  const [fTexto, setFTexto] = useState('')
+  // diálogo PDF: guarda la promo (o selección) sobre la que se pide PDF
+  const [pdfFor, setPdfFor] = useState(null) // {productos, nombrePromo} | null
   const BASE_URL = window.location.origin
 
   useEffect(() => { cargarPromos() }, [])
@@ -1502,8 +1510,32 @@ export function PromoCreatorScr(P) {
     setMisPromos(data || [])
   }
 
+  const disp = prods.filter(p => p.cantidad > 0)
+  // valores únicos para los desplegables
+  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort()
+  const cats = uniq(disp.map(p => p.categorias?.nombre))
+  const tallas = uniq(disp.map(p => p.atributos?.talla))
+  const colores = uniq(disp.map(p => p.color))
+  const generos = uniq(disp.map(p => p.atributos?.genero))
+
+  const filtrados = disp.filter(p =>
+    (!fCat || p.categorias?.nombre === fCat) &&
+    (!fTalla || p.atributos?.talla === fTalla) &&
+    (!fColor || p.color === fColor) &&
+    (!fGenero || p.atributos?.genero === fGenero) &&
+    (!fTexto || (p.nombre || '').toLowerCase().includes(fTexto.toLowerCase()) || (p.codigo || '').toLowerCase().includes(fTexto.toLowerCase()))
+  )
+
+  const limpiarFiltros = () => { setFCat(''); setFTalla(''); setFColor(''); setFGenero(''); setFTexto('') }
+
   const toggleProd = (p) => {
     setSelProds(prev => prev.find(x => x.id === p.id) ? prev.filter(x => x.id !== p.id) : [...prev, p])
+  }
+  const agregarTodos = () => {
+    setSelProds(prev => {
+      const ids = new Set(prev.map(x => x.id))
+      return [...prev, ...filtrados.filter(p => !ids.has(p.id))]
+    })
   }
 
   const generarCodigo = () => Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -1530,22 +1562,14 @@ export function PromoCreatorScr(P) {
     const url = `${BASE_URL}/promo/${promo.codigo}`
     if (navigator.share) {
       try {
-        // Obtener fotos de los productos
         const { data: ps } = await supabase.from('productos').select('foto_url,nombre').in('id', promo.producto_ids).eq('activo', true)
         const fotosDisp = (ps || []).filter(p => p.foto_url)
         if (fotosDisp.length > 0) {
-          // Descargar fotos y compartir
           const blobs = await Promise.all(fotosDisp.slice(0, 10).map(p => fetch(p.foto_url).then(r => r.blob())))
           const files = blobs.map((b, i) => new File([b], `foto_${i+1}.jpg`, { type: 'image/jpeg' }))
-          await navigator.share({ files, title: promo.nombre || 'Promoción', text: `🛍️ ${promo.nombre || 'Promoción especial'}
-
-👆 Toca para ver y comprar:
-${url}` })
+          await navigator.share({ files, title: promo.nombre || 'Promoción', text: `🛍️ ${promo.nombre || 'Promoción especial'}\n\n👆 Toca para ver y comprar:\n${url}` })
         } else {
-          await navigator.share({ title: promo.nombre || 'Promoción', text: `🛍️ ${promo.nombre || 'Promoción especial'}
-
-👆 Ver y comprar:
-${url}`, url })
+          await navigator.share({ title: promo.nombre || 'Promoción', text: `🛍️ ${promo.nombre || 'Promoción especial'}\n\n👆 Ver y comprar:\n${url}`, url })
         }
       } catch (e) { if (e.name !== 'AbortError') { navigator.clipboard.writeText(url); notify('📋 Link copiado') } }
     } else {
@@ -1554,8 +1578,7 @@ ${url}`, url })
   }
 
   const copiarLink = (promo) => {
-    const url = `${BASE_URL}/promo/${promo.codigo}`
-    navigator.clipboard.writeText(url)
+    navigator.clipboard.writeText(`${BASE_URL}/promo/${promo.codigo}`)
     notify('📋 Link copiado')
   }
 
@@ -1565,14 +1588,33 @@ ${url}`, url })
     notify('Promoción desactivada'); await cargarPromos()
   }
 
+  // Abre el diálogo de PDF para una promo guardada (resuelve sus productos) o para la selección actual
+  const pedirPDFdePromo = async (promo) => {
+    const { data } = await supabase.from('productos').select('*, categorias(nombre)').in('id', promo.producto_ids || []).eq('activo', true)
+    setPdfFor({ productos: data || [], nombrePromo: promo.nombre })
+  }
+  const pedirPDFdeSeleccion = () => {
+    if (!selProds.length) { notify('Selecciona productos primero', 'error'); return }
+    setPdfFor({ productos: selProds, nombrePromo: nombre })
+  }
+  const hacerPDF = (porPagina) => {
+    const items = pdfFor?.productos || []
+    if (!items.length) { notify('Sin productos con stock', 'error'); setPdfFor(null); return }
+    if (porPagina === 1) generarCatalogoPDF(items, emp, '')
+    else generarCatalogoPDFGrid(items, emp, porPagina)
+    setPdfFor(null)
+  }
+
+  const selS = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12, background: '#fff', color: G.text, marginBottom: 6 }
+
   return (
     <div>
-      <Hdr tit={tit} sec="🎯 Promociones" onBack={() => setScr('submenu')} />
+      <Hdr tit={tit} sec="🎯 Promociones / Catálogo" onBack={() => setScr('submenu')} />
       <div style={{ padding: 16 }}>
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button onClick={() => setVista('lista')} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: vista === 'lista' ? G.gold : G.goldSf, color: vista === 'lista' ? '#fff' : G.goldDk, fontWeight: 700, cursor: 'pointer' }}>Mis promos</button>
-          <button onClick={() => { setVista('crear'); setPromoCreada(null); setSelProds([]); setNombre(''); setFechaVence('') }} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: vista === 'crear' ? G.gold : G.goldSf, color: vista === 'crear' ? '#fff' : G.goldDk, fontWeight: 700, cursor: 'pointer' }}>➕ Nueva promo</button>
+          <button onClick={() => { setVista('crear'); setPromoCreada(null); setSelProds([]); setNombre(''); setFechaVence(''); limpiarFiltros() }} style={{ flex: 1, padding: 10, borderRadius: 8, border: 'none', background: vista === 'crear' ? G.gold : G.goldSf, color: vista === 'crear' ? '#fff' : G.goldDk, fontWeight: 700, cursor: 'pointer' }}>➕ Armar nueva</button>
         </div>
 
         {/* Lista de promos existentes */}
@@ -1582,7 +1624,7 @@ ${url}`, url })
               <div style={{ textAlign: 'center', padding: 40, color: G.muted }}>
                 <p style={{ fontSize: 40 }}>🎯</p>
                 <p>No tienes promociones activas</p>
-                <button onClick={() => setVista('crear')} style={{ marginTop: 12, padding: '10px 20px', borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Crear primera promo</button>
+                <button onClick={() => setVista('crear')} style={{ marginTop: 12, padding: '10px 20px', borderRadius: 8, border: 'none', background: G.gold, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Armar la primera</button>
               </div>
             ) : misPromos.map(pr => (
               <div key={pr.id} style={{ background: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, border: '1px solid ' + G.border }}>
@@ -1595,30 +1637,44 @@ ${url}`, url })
                   <button onClick={() => desactivar(pr.id)} style={{ background: '#FEE2E2', color: G.err, border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 10 }}>🗑</button>
                 </div>
                 <div style={{ background: G.goldLt, borderRadius: 8, padding: '8px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <p style={{ fontSize: 11, color: G.goldDk, margin: 0, fontFamily: 'monospace' }}>{window.location.origin}/promo/{pr.codigo}</p>
+                  <p style={{ fontSize: 11, color: G.goldDk, margin: 0, fontFamily: 'monospace' }}>{BASE_URL}/promo/{pr.codigo}</p>
                   <button onClick={() => copiarLink(pr)} style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 10, marginLeft: 8, whiteSpace: 'nowrap' }}>📋 Copiar</button>
                 </div>
-                <button onClick={() => compartir(pr)} style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: 'none', background: '#25D366', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  📤 Compartir fotos + link por WhatsApp
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => compartir(pr)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: '#25D366', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📤 WhatsApp</button>
+                  <button onClick={() => pedirPDFdePromo(pr)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📄 PDF</button>
+                </div>
               </div>
             ))}
           </>
         )}
 
-        {/* Crear nueva promo */}
+        {/* Armar nueva promo/catálogo */}
         {vista === 'crear' && !promoCreada && (
           <>
-            <Crd title="Datos de la promoción">
+            <Crd title="Datos">
               <label style={{ fontSize: 11, color: G.muted }}>Nombre (opcional)</label>
-              <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Ofertas de verano, Liquidación..." style={iS(G)} />
+              <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Ofertas de verano..." style={iS(G)} />
               <label style={{ fontSize: 11, color: G.muted }}>Vence el (opcional)</label>
               <input value={fechaVence} onChange={e => setFechaVence(e.target.value)} type="date" style={iS(G)} />
             </Crd>
 
-            <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: G.text }}>Selecciona productos ({selProds.length})</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-              {prods.filter(p => p.cantidad > 0).map(p => {
+            {/* Filtros */}
+            <Crd title="🔍 Filtrar productos">
+              <input value={fTexto} onChange={e => setFTexto(e.target.value)} placeholder="Nombre o código..." style={iS(G)} />
+              {cats.length > 0 && <select value={fCat} onChange={e => setFCat(e.target.value)} style={selS}><option value="">Categoría: todas</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>}
+              {tallas.length > 0 && <select value={fTalla} onChange={e => setFTalla(e.target.value)} style={selS}><option value="">Talla: todas</option>{tallas.map(t => <option key={t} value={t}>{t}</option>)}</select>}
+              {colores.length > 0 && <select value={fColor} onChange={e => setFColor(e.target.value)} style={selS}><option value="">Color: todos</option>{colores.map(c => <option key={c} value={c}>{c}</option>)}</select>}
+              {generos.length > 0 && <select value={fGenero} onChange={e => setFGenero(e.target.value)} style={selS}><option value="">Género: todos</option>{generos.map(g => <option key={g} value={g}>{g}</option>)}</select>}
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button onClick={limpiarFiltros} style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid ' + G.border, background: '#fff', color: G.err, fontSize: 12, cursor: 'pointer' }}>Limpiar filtros</button>
+                <button onClick={agregarTodos} style={{ flex: 1, padding: 8, borderRadius: 8, border: 'none', background: G.goldSf, color: G.goldDk, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>＋ Agregar {filtrados.length} filtrados</button>
+              </div>
+            </Crd>
+
+            <p style={{ fontSize: 13, fontWeight: 700, margin: '4px 0 10px', color: G.text }}>Productos ({filtrados.length}) — seleccionados: {selProds.length}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 90 }}>
+              {filtrados.map(p => {
                 const sel = selProds.find(x => x.id === p.id)
                 return (
                   <div key={p.id} onClick={() => toggleProd(p)}
@@ -1628,6 +1684,7 @@ ${url}`, url })
                       : <div style={{ width: '100%', height: 100, background: G.goldLt, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 28, opacity: 0.3 }}>👗</span></div>}
                     <div style={{ padding: 8 }}>
                       <p style={{ fontSize: 11, fontWeight: 600, margin: 0, lineHeight: 1.2 }}>{p.nombre}</p>
+                      <p style={{ fontSize: 9, color: G.muted, margin: '1px 0 0' }}>{[p.atributos?.talla && ('T:' + p.atributos.talla), p.color].filter(Boolean).join(' • ')}</p>
                       <p style={{ fontSize: 12, fontWeight: 800, color: G.gold, margin: '2px 0 0' }}>S/{p.precio_venta}</p>
                     </div>
                   </div>
@@ -1635,41 +1692,53 @@ ${url}`, url })
               })}
             </div>
 
-            <button onClick={crearPromo} disabled={guardando || !selProds.length}
-              style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: selProds.length ? G.gold : '#ccc', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-              {guardando ? '⏳ Creando...' : `🎯 Crear promoción con ${selProds.length} producto${selProds.length !== 1 ? 's' : ''}`}
-            </button>
+            {/* Barra flotante del carrito */}
+            {selProds.length > 0 && (
+              <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid ' + G.border, padding: 12, display: 'flex', gap: 8, boxShadow: '0 -2px 12px rgba(0,0,0,0.1)', zIndex: 50 }}>
+                <button onClick={pedirPDFdeSeleccion} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>📄 PDF ({selProds.length})</button>
+                <button onClick={crearPromo} disabled={guardando} style={{ flex: 2, padding: 12, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{guardando ? '⏳...' : `🎯 Guardar promo (${selProds.length})`}</button>
+              </div>
+            )}
           </>
         )}
 
-        {/* Promo creada exitosamente */}
+        {/* Promo creada */}
         {promoCreada && (
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 48, margin: 0 }}>🎉</p>
             <h2 style={{ color: G.gold, fontSize: 20, fontWeight: 800, margin: '8px 0' }}>¡Promoción lista!</h2>
             <div style={{ background: G.goldLt, borderRadius: 12, padding: 16, margin: '12px 0', border: '1px solid ' + G.border }}>
-              <p style={{ fontSize: 11, color: G.muted, margin: '0 0 4px' }}>Tu link de promoción:</p>
+              <p style={{ fontSize: 11, color: G.muted, margin: '0 0 4px' }}>Tu link:</p>
               <p style={{ fontSize: 13, fontWeight: 700, color: G.goldDk, fontFamily: 'monospace', margin: 0, wordBreak: 'break-all' }}>{BASE_URL}/promo/{promoCreada.codigo}</p>
             </div>
-            <button onClick={() => compartir(promoCreada)}
-              style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#25D366', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
-              📤 Compartir fotos + link por WhatsApp
-            </button>
-            <button onClick={() => copiarLink(promoCreada)}
-              style={{ width: '100%', padding: 12, borderRadius: 12, border: 'none', background: '#2563EB', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 10 }}>
-              📋 Copiar solo el link
-            </button>
-            <button onClick={() => { setVista('lista'); setPromoCreada(null) }}
-              style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 14, cursor: 'pointer' }}>
-              Ver mis promociones
-            </button>
+            <button onClick={() => compartir(promoCreada)} style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '#25D366', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>📤 Compartir por WhatsApp</button>
+            <button onClick={() => pedirPDFdePromo(promoCreada)} style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: G.gold, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>📄 Generar PDF</button>
+            <button onClick={() => copiarLink(promoCreada)} style={{ width: '100%', padding: 12, borderRadius: 12, border: 'none', background: '#2563EB', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 10 }}>📋 Copiar link</button>
+            <button onClick={() => { setVista('lista'); setPromoCreada(null) }} style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 14, cursor: 'pointer' }}>Ver mis promociones</button>
+          </div>
+        )}
+
+        {/* Diálogo: productos por página */}
+        {pdfFor && (
+          <div onClick={() => setPdfFor(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 340 }}>
+              <h3 style={{ margin: '0 0 4px', fontSize: 16, color: G.text }}>📄 Generar PDF</h3>
+              <p style={{ fontSize: 12, color: G.muted, margin: '0 0 14px' }}>{pdfFor.productos.length} productos. ¿Cuántos por página?</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button onClick={() => hacerPDF(1)} style={{ padding: 14, borderRadius: 10, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>1 — ficha grande</button>
+                <button onClick={() => hacerPDF(2)} style={{ padding: 14, borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', color: G.text, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>2 por página</button>
+                <button onClick={() => hacerPDF(4)} style={{ padding: 14, borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', color: G.text, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>4 por página</button>
+                <button onClick={() => hacerPDF(6)} style={{ padding: 14, borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', color: G.text, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>6 por página</button>
+                <button onClick={() => hacerPDF(9)} style={{ padding: 14, borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', color: G.text, fontSize: 13, fontWeight: 700, cursor: 'pointer', gridColumn: '1 / -1' }}>9 por página (grilla densa)</button>
+              </div>
+              <button onClick={() => setPdfFor(null)} style={{ width: '100%', padding: 10, marginTop: 12, borderRadius: 10, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+            </div>
           </div>
         )}
       </div>
     </div>
   )
 }
-
 /* ═══ PROVEEDORES (mantenimiento) ═══ */
 export function ProveedoresScr(P) {
   const { eid, tit, notify, setScr } = P
