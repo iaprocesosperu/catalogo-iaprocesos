@@ -20,36 +20,78 @@ export default function CatalogoScreen(P) {
   const [modoSel, setModoSel] = useState(false)
   const [sel, setSel] = useState([]) // ids seleccionados
   const [trabajando, setTrabajando] = useState('')
+  const [pideTipo, setPideTipo] = useState(false)
   const fileZipRef = useRef(null)
 
   const toggleSel = (id) => setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
   const selTodos = () => setSel(fl.map(p => p.id))
   const limpiarSel = () => setSel([])
 
-  const descargarZip = async () => {
+  // Dibuja el código en una franja blanca inferior (para lectura por IA/OCR)
+  const fotoConCodigo = (fotoUrl, codigo) => new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth, h = img.naturalHeight
+        const franja = Math.max(70, Math.round(h * 0.15)) // 15% del alto, mínimo 70px
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h + franja
+        const ctx = canvas.getContext('2d')
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0, w, h)
+        // texto del código, centrado en la franja
+        const texto = 'COD: ' + codigo
+        let fontSize = Math.round(franja * 0.55)
+        ctx.fillStyle = '#000000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.font = `bold ${fontSize}px Arial, sans-serif`
+        // reducir si no cabe a lo ancho
+        while (ctx.measureText(texto).width > w * 0.92 && fontSize > 12) {
+          fontSize -= 2; ctx.font = `bold ${fontSize}px Arial, sans-serif`
+        }
+        ctx.fillText(texto, w / 2, h + franja / 2)
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob null')), 'image/jpeg', 0.9)
+      } catch (e) { reject(e) }
+    }
+    img.onerror = () => reject(new Error('no se pudo cargar la imagen'))
+    img.src = fotoUrl
+  })
+
+  const descargarZip = async (conCodigo) => {
     if (!window.JSZip) { notify('No cargó JSZip, recarga la página', 'error'); return }
+    setPideTipo(false)
     const elegidos = fl.filter(p => sel.includes(p.id) && p.foto_url)
     const sinFoto = sel.length - elegidos.length
     if (!elegidos.length) { notify('Ninguno de los seleccionados tiene foto', 'error'); return }
     setTrabajando('Generando ZIP...')
+    let fallidas = 0
     try {
       const zip = new window.JSZip()
       for (let i = 0; i < elegidos.length; i++) {
         const p = elegidos[i]
-        setTrabajando(`Descargando ${i + 1}/${elegidos.length}...`)
+        setTrabajando(`Procesando ${i + 1}/${elegidos.length}...`)
         try {
-          const resp = await fetch(p.foto_url)
-          const blob = await resp.blob()
-          zip.file(`${p.codigo}.jpg`, blob)
-        } catch (e) { /* si una falla, sigue con las demás */ }
+          if (conCodigo) {
+            const blob = await fotoConCodigo(p.foto_url, p.codigo)
+            zip.file(`${p.codigo}.jpg`, blob)
+          } else {
+            const resp = await fetch(p.foto_url)
+            const blob = await resp.blob()
+            zip.file(`${p.codigo}.jpg`, blob)
+          }
+        } catch (e) { fallidas++ }
       }
       setTrabajando('Comprimiendo...')
       const contenido = await zip.generateAsync({ type: 'blob' })
       const url = URL.createObjectURL(contenido)
       const a = document.createElement('a')
-      a.href = url; a.download = `fotos_${(linAct?.nombre || 'catalogo')}_${new Date().toISOString().split('T')[0]}.zip`
+      const sufijo = conCodigo ? '_con_codigo' : ''
+      a.href = url; a.download = `fotos${sufijo}_${(linAct?.nombre || 'catalogo')}_${new Date().toISOString().split('T')[0]}.zip`
       a.click(); URL.revokeObjectURL(url)
-      notify(`✅ ${elegidos.length} fotos${sinFoto > 0 ? ` (${sinFoto} sin foto omitidos)` : ''}`)
+      let msg = `✅ ${elegidos.length - fallidas} fotos`
+      if (fallidas > 0) msg += `, ${fallidas} fallaron`
+      if (sinFoto > 0) msg += `, ${sinFoto} sin foto`
+      notify(msg)
     } catch (e) { notify('Error: ' + e.message, 'error') }
     setTrabajando('')
   }
@@ -185,7 +227,20 @@ export default function CatalogoScreen(P) {
       {/* Barra flotante: descargar ZIP de seleccionados */}
       {modoSel && sel.length > 0 && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid ' + G.border, padding: 12, boxShadow: '0 -2px 12px rgba(0,0,0,0.12)', zIndex: 50 }}>
-          <button onClick={descargarZip} style={{ width: '100%', padding: 13, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>📦 Descargar ZIP de fotos ({sel.length})</button>
+          <button onClick={() => setPideTipo(true)} style={{ width: '100%', padding: 13, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>📦 Descargar ZIP de fotos ({sel.length})</button>
+        </div>
+      )}
+
+      {/* Diálogo: tipo de descarga */}
+      {pideTipo && (
+        <div onClick={() => setPideTipo(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 150, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 360 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 16, color: G.text }}>📦 Descargar {sel.length} fotos</h3>
+            <p style={{ fontSize: 12, color: G.muted, margin: '0 0 16px' }}>¿Cómo quieres las imágenes?</p>
+            <button onClick={() => descargarZip(false)} style={{ width: '100%', padding: 14, borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', color: G.text, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 10, textAlign: 'left' }}>📷 Fotos sin código<br /><span style={{ fontSize: 11, fontWeight: 400, color: G.muted }}>La imagen original, tal cual</span></button>
+            <button onClick={() => descargarZip(true)} style={{ width: '100%', padding: 14, borderRadius: 10, border: '1px solid ' + G.gold, background: G.goldLt, color: G.goldDk, fontSize: 14, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>🏷️ Fotos con código<br /><span style={{ fontSize: 11, fontWeight: 400, color: G.muted }}>Agrega el código abajo (para leer con IA)</span></button>
+            <button onClick={() => setPideTipo(false)} style={{ width: '100%', padding: 10, marginTop: 12, borderRadius: 10, border: 'none', background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+          </div>
         </div>
       )}
 
