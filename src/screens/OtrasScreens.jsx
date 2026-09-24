@@ -1510,7 +1510,7 @@ export function PromoCreatorScr(P) {
     setMisPromos(data || [])
   }
 
-  const disp = prods.filter(p => p.cantidad > 0)
+  const disp = prods.filter(p => p.cantidad > 0 && !p.oculto)
   // valores únicos para los desplegables
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort()
   const cats = uniq(disp.map(p => p.categorias?.nombre))

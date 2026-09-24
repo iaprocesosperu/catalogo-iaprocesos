@@ -37,7 +37,7 @@ export default function PublicCatalogPage({ onIntranet }) {
       const { data: ps } = await supabase
         .from('productos').select('*,categorias(nombre)')
         .eq('empresa_id', cfg.empresa_id).eq('linea_id', cfg.linea_id)
-        .eq('activo', true).gt('cantidad', 0).order('created_at', { ascending: false })
+        .eq('activo', true).eq('oculto', false).gt('cantidad', 0).order('created_at', { ascending: false })
       setProds(ps || [])
       setLoading(false)
     }
