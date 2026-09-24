@@ -60,6 +60,7 @@ export default function App() {
   const [notif, setNotif] = useState(null)
   const [editP, setEditP] = useState(null)
   const [retorno, setRetorno] = useState(null) // pantalla a la que volver tras guardar en el editor
+  const [origenEdit, setOrigenEdit] = useState(null) // origen a abrir en edición desde el reporte
   const [ventaP, setVentaP] = useState(null)
   const [isMobile, setIsMobile] = useState(getIsMobile())
   // Modo público: muestra catálogo público, false = muestra intranet
@@ -126,7 +127,7 @@ export default function App() {
   const eid = emp?.id, lid = linAct?.id
   const tit = `${emp?.nombre || ''} › ${linAct?.nombre || ''}`
   const cF = cats.filter(c => c.linea_id === lid), oF = oris.filter(o => o.linea_id === lid), pF = prods.filter(p => p.linea_id === lid)
-  const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, cols, prods: pF, allProds: prods, clis, vents, listaTallas, secciones, pedidos, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G, isMobile, retorno, setRetorno }
+  const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, cols, prods: pF, allProds: prods, clis, vents, listaTallas, secciones, pedidos, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G, isMobile, retorno, setRetorno, origenEdit, setOrigenEdit }
 
   // Rutas públicas por URL
   if (window.location.pathname.startsWith('/comprar/')) return <PublicProductPage />

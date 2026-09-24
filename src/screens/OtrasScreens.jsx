@@ -319,7 +319,7 @@ function OrigenDetalle({ origen, eid, onClose }) {
 
 /* ═══ ORÍGENES ═══ */
 export function OrigenesScr(P) {
-  const { eid, lid, tit, oris, notify, loadAll, setScr } = P
+  const { eid, lid, tit, oris, notify, loadAll, setScr, origenEdit, setOrigenEdit, retorno, setRetorno } = P
   const [showAdd, setShowAdd] = useState(false)
   const [f, setF] = useState({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg', proveedor_id: '' })
   const [editId, setEditId] = useState(null)
@@ -347,12 +347,20 @@ export function OrigenesScr(P) {
     if (eid) cargarProv()
   }, [eid])
 
+  useEffect(() => {
+    if (origenEdit) {
+      editar(origenEdit)
+      if (setOrigenEdit) setOrigenEdit(null)
+    }
+  }, [origenEdit])
+
   const guardar = async () => {
     if (!f.nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
     const data = { empresa_id: eid, linea_id: lid, nombre: f.nombre.trim(), cantidad: parseInt(f.cantidad) || 0, precio_costo_defecto: f.precio_costo_defecto !== '' ? parseFloat(f.precio_costo_defecto) : null, precio_venta_defecto: f.precio_venta_defecto !== '' ? parseFloat(f.precio_venta_defecto) : null, fecha: f.fecha || null, observaciones: f.observaciones || null, es_granel: f.es_granel, unidad_base: f.es_granel ? (f.unidad_base || 'kg') : null, stock_granel: f.es_granel ? (parseFloat(f.cantidad) || 0) : null, proveedor_id: f.proveedor_id !== '' ? parseInt(f.proveedor_id) : null }
     if (editId) { await supabase.from('origenes').update(data).eq('id', editId); notify('Actualizado') }
     else { await supabase.from('origenes').insert({ ...data, estado: 'activo' }); notify('Agregado') }
     setShowAdd(false); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg', proveedor_id: '' }); await loadAll()
+    if (retorno === 'reporteOrigenes') { if (setRetorno) setRetorno(null); setScr('reporteOrigenes') }
   }
 
   const editar = o => {
@@ -1819,7 +1827,7 @@ export function ProveedoresScr(P) {
 
 /* ═══ REPORTE DE ORÍGENES (con filtro por proveedor + export Excel) ═══ */
 export function ReporteOrigenesScr(P) {
-  const { eid, tit, notify, setScr, setEditP, setRetorno } = P
+  const { eid, tit, notify, setScr, setEditP, setRetorno, oris, setOrigenEdit } = P
   const [rows, setRows] = useState([])
   const [proveedores, setProveedores] = useState([])
   const [filtro, setFiltro] = useState([]) // ids de proveedores seleccionados; [] = todos
@@ -1907,6 +1915,38 @@ export function ReporteOrigenesScr(P) {
     if (setRetorno) setRetorno('reporteOrigenes')
     setEditP(popProd); cerrarPop(); setScr('registrar')
   }
+
+  // ── Editar el ORIGEN (desde el nombre) ──
+  const editarOrigen = (row) => {
+    const o = (oris || []).find(x => x.id === row.origen_id)
+    if (!o) { notify('Origen no encontrado en esta línea', 'error'); return }
+    if (setRetorno) setRetorno('reporteOrigenes')
+    if (setOrigenEdit) setOrigenEdit(o)
+    setScr('origenes')
+  }
+
+  // ── Visor de VENDIDOS de un origen ──
+  const [popVen, setPopVen] = useState(null) // {nombre}
+  const [popVenList, setPopVenList] = useState([])
+  const [popVenIdx, setPopVenIdx] = useState(0)
+  const [popVenLoad, setPopVenLoad] = useState(false)
+  const abrirVendidos = async (row) => {
+    if (!row.origen_id || !row.und_vendidas) return
+    setPopVen({ nombre: row.origen }); setPopVenIdx(0); setPopVenList([]); setPopVenLoad(true)
+    // productos de ese origen
+    const { data: prodsO } = await supabase.from('productos').select('id,codigo,nombre,foto_url').eq('origen_id', row.origen_id)
+    const ids = (prodsO || []).map(p => p.id)
+    const mapP = {}; (prodsO || []).forEach(p => { mapP[p.id] = p })
+    if (!ids.length) { setPopVenLoad(false); return }
+    const { data: vtas } = await supabase.from('ventas')
+      .select('producto_id,cantidad,precio_venta_real,metodo_pago,created_at')
+      .eq('empresa_id', eid).in('producto_id', ids).order('created_at', { ascending: false })
+    const lista = (vtas || []).map(v => ({ ...v, prod: mapP[v.producto_id] || {} }))
+    setPopVenList(lista); setPopVenLoad(false)
+  }
+  const cerrarVen = () => { setPopVen(null); setPopVenList([]); setPopVenIdx(0) }
+  const venItem = popVenList[popVenIdx]
+
   const tot = visibles.reduce((a, r) => ({
     und_declaradas: a.und_declaradas + r.und_declaradas,
     und_registradas: a.und_registradas + r.und_registradas,
@@ -1986,15 +2026,17 @@ export function ReporteOrigenesScr(P) {
               <tbody>
                 {visibles.map((r, i) => (
                   <tr key={i}>
-                    <td style={tdS}>{r.num_productos > 0
-                      ? <span onClick={() => abrirOrigen(r)} style={{ color: G.gold, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>{r.origen}</span>
-                      : r.origen}</td>
+                    <td style={tdS}><span onClick={() => editarOrigen(r)} style={{ color: G.gold, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>{r.origen}</span></td>
                     <td style={tdS}>{r.proveedor || '—'}</td>
                     <td style={{ ...tdS, ...num }}>{r.und_declaradas}</td>
-                    <td style={{ ...tdS, ...num }}>{r.und_registradas}</td>
+                    <td style={{ ...tdS, ...num }}>{r.num_productos > 0
+                      ? <span onClick={() => abrirOrigen(r)} style={{ color: '#2563EB', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>{r.und_registradas}</span>
+                      : r.und_registradas}</td>
                     <td style={{ ...tdS, ...num }}>{r.costo_unit !== '' ? r.costo_unit : '—'}</td>
                     <td style={{ ...tdS, ...num }}>{r.inv_declarada.toFixed(1)}</td>
-                    <td style={{ ...tdS, ...num }}>{r.und_vendidas}</td>
+                    <td style={{ ...tdS, ...num }}>{r.und_vendidas > 0
+                      ? <span onClick={() => abrirVendidos(r)} style={{ color: '#059669', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>{r.und_vendidas}</span>
+                      : r.und_vendidas}</td>
                     <td style={{ ...tdS, ...num }}>{r.vendido_soles.toFixed(1)}</td>
                     <td style={{ ...tdS, ...num }}>{r.costo_recuperado.toFixed(1)}</td>
                   </tr>
@@ -2057,6 +2099,46 @@ export function ReporteOrigenesScr(P) {
                       style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.border, background: popIdx >= popProds.length - 1 ? '#f5f5f5' : '#fff', color: popIdx >= popProds.length - 1 ? '#bbb' : G.text, fontSize: 13, fontWeight: 700, cursor: popIdx >= popProds.length - 1 ? 'default' : 'pointer' }}>Siguiente ›</button>
                   </div>
                   <button onClick={editarEnCatalogo} style={{ width: '100%', padding: 13, marginTop: 8, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>✏️ Editar en catálogo</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Popup: vendidos del origen */}
+        {popVen && (
+          <div onClick={cerrarVen} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 380, maxHeight: '92vh', overflow: 'auto' }}>
+              <div style={{ background: '#059669', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
+                <div>
+                  <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 10, margin: 0 }}>Vendidos de</p>
+                  <p style={{ color: '#fff', fontSize: 15, fontWeight: 800, margin: 0 }}>{popVen.nombre}</p>
+                </div>
+                <button onClick={cerrarVen} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 8, width: 30, height: 30, color: '#fff', fontSize: 16, cursor: 'pointer' }}>✕</button>
+              </div>
+              {popVenLoad ? (
+                <div style={{ padding: 40, textAlign: 'center', color: G.muted }}>⏳ Cargando ventas...</div>
+              ) : !venItem ? (
+                <div style={{ padding: 40, textAlign: 'center', color: G.muted }}>Sin ventas</div>
+              ) : (
+                <div style={{ padding: 16 }}>
+                  <p style={{ textAlign: 'center', fontSize: 12, color: G.muted, margin: '0 0 10px' }}>{popVenIdx + 1} / {popVenList.length}</p>
+                  {venItem.prod?.foto_url
+                    ? <img src={venItem.prod.foto_url} alt="" style={{ width: '100%', height: 300, objectFit: 'contain', borderRadius: 12, background: G.goldLt }} />
+                    : <div style={{ width: '100%', height: 300, background: G.goldLt, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 48, opacity: 0.3 }}>📦</span></div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                    <span style={{ fontSize: 11, background: G.goldSf, color: G.goldDk, padding: '3px 8px', borderRadius: 5, fontWeight: 700 }}>{venItem.prod?.codigo || ''}</span>
+                    <span style={{ fontSize: 18, fontWeight: 900, color: '#059669' }}>S/{venItem.precio_venta_real}</span>
+                  </div>
+                  <p style={{ fontSize: 15, fontWeight: 700, margin: '6px 0 2px', color: G.text }}>{venItem.prod?.nombre || ''}</p>
+                  <p style={{ fontSize: 12, color: G.muted, margin: 0 }}>
+                    Cantidad: {venItem.cantidad}{venItem.metodo_pago ? ' • ' + venItem.metodo_pago : ''}
+                    {venItem.created_at ? ' • ' + new Date(venItem.created_at).toLocaleDateString() : ''}
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                    <button onClick={() => setPopVenIdx(i => Math.max(0, i - 1))} disabled={popVenIdx === 0} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.border, background: popVenIdx === 0 ? '#f5f5f5' : '#fff', color: popVenIdx === 0 ? '#bbb' : G.text, fontSize: 13, fontWeight: 700, cursor: popVenIdx === 0 ? 'default' : 'pointer' }}>‹ Anterior</button>
+                    <button onClick={() => setPopVenIdx(i => Math.min(popVenList.length - 1, i + 1))} disabled={popVenIdx >= popVenList.length - 1} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.border, background: popVenIdx >= popVenList.length - 1 ? '#f5f5f5' : '#fff', color: popVenIdx >= popVenList.length - 1 ? '#bbb' : G.text, fontSize: 13, fontWeight: 700, cursor: popVenIdx >= popVenList.length - 1 ? 'default' : 'pointer' }}>Siguiente ›</button>
+                  </div>
                 </div>
               )}
             </div>
