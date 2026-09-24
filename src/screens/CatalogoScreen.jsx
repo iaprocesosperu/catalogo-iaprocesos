@@ -11,11 +11,13 @@ export default function CatalogoScreen(P) {
   const [fOrigen, setFOrigen] = useState('')
   const [viewerProd, setViewerProd] = useState(null)
   const [ocultarAgotados, setOcultarAgotados] = useState(true)
+  const [verOcultos, setVerOcultos] = useState(false)
   const origenesDisp = [...new Set(prods.map(p => p.origenes?.nombre).filter(Boolean))].sort()
   const fl = prods.filter(p =>
     (!f || p.nombre?.toLowerCase().includes(f.toLowerCase()) || p.codigo?.toLowerCase().includes(f.toLowerCase())) &&
     (!fOrigen || p.origenes?.nombre === fOrigen) &&
-    (!ocultarAgotados || p.cantidad > 0)
+    (!ocultarAgotados || p.cantidad > 0) &&
+    (verOcultos ? true : !p.oculto)
   )
 
   // ── Selección múltiple + ZIP fotos ──
@@ -222,6 +224,7 @@ export default function CatalogoScreen(P) {
             </select>
           )}
           <button onClick={() => setOcultarAgotados(v => !v)} style={{ padding: '8px 10px', borderRadius: 10, border: 'none', background: ocultarAgotados ? '#fff' : 'rgba(255,255,255,0.2)', color: ocultarAgotados ? G.gold : '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{ocultarAgotados ? '✓ Sin agotados' : 'Ver agotados'}</button>
+          <button onClick={() => setVerOcultos(v => !v)} style={{ padding: '8px 10px', borderRadius: 10, border: 'none', background: verOcultos ? '#374151' : 'rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{verOcultos ? '👁️‍🗨️ Viendo ocultos' : 'Ver ocultos'}</button>
         </div>
       </div>
       <div style={{ background: '#fff', position: 'sticky', top: 0, zIndex: 39 }}>
