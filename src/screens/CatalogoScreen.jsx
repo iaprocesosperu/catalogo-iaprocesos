@@ -222,7 +222,8 @@ export default function CatalogoScreen(P) {
   return (
     <div>
       {viewerProd && <PhotoViewerModal prod={viewerProd} emp={emp} notify={notify} loadAll={loadAll} onClose={() => setViewerProd(null)} />}
-      <div style={{ background: G.gold, padding: '16px 16px 12px', position: 'sticky', top: 0, zIndex: 40 }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 40 }}>
+      <div style={{ background: G.gold, padding: '16px 16px 12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <div>
             <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 10, margin: 0 }}>{emp?.nombre}</p>
@@ -253,8 +254,9 @@ export default function CatalogoScreen(P) {
           <button onClick={() => setVerOcultos(v => !v)} style={{ padding: '8px 10px', borderRadius: 10, border: 'none', background: verOcultos ? '#374151' : 'rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{verOcultos ? '👁️‍🗨️ Viendo ocultos' : 'Ver ocultos'}</button>
         </div>
       </div>
-      <div style={{ background: '#fff', position: 'sticky', top: 0, zIndex: 39 }}>
+      <div style={{ background: '#fff' }}>
         <LineSel lineas={lineas} linAct={linAct} setLinAct={setLinAct} />
+      </div>
       </div>
       <div style={{ padding: '4px 12px 0', fontSize: 12, color: G.muted, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>{fl.length} productos</span>

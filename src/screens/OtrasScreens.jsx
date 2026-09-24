@@ -1862,7 +1862,7 @@ export function ReporteOrigenesScr(P) {
           proveedor_id: o.proveedor_id || null,
           proveedor: o.proveedor_id ? (provName[o.proveedor_id] || '') : '',
           und_declaradas: o.cantidad || 0,
-          und_registradas: reg.unidades,
+          und_registradas: reg.unidades + ven.und,
           costo_unit: o.precio_costo_defecto ?? '',
           inv_declarada: (o.cantidad || 0) * (o.precio_costo_defecto || 0),
           und_vendidas: ven.und,

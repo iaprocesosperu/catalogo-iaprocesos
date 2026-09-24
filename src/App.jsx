@@ -140,7 +140,7 @@ export default function App() {
     return (
       <div style={{ display: 'flex', minHeight: '100vh', background: '#F5F5F5' }}>
         <NavBar scr={scr} setScr={setScr} setEditP={setEditP} isMobile={false} />
-        <div style={{ flex: 1, marginLeft: 210, minHeight: '100vh', background: G.bg, overflowY: 'auto' }}>
+        <div style={{ flex: 1, marginLeft: 210, height: '100vh', background: G.bg, overflowY: 'auto' }}>
           {notif && (
             <div style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10000, background: notif.t === 'success' ? G.ok : G.err, color: '#fff', padding: '10px 20px', borderRadius: 12, fontSize: 14, fontWeight: 600, boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
               {notif.m}
