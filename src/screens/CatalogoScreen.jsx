@@ -12,6 +12,10 @@ export default function CatalogoScreen(P) {
   const [viewerProd, setViewerProd] = useState(null)
   const [ocultarAgotados, setOcultarAgotados] = useState(true)
   const [verOcultos, setVerOcultos] = useState(false)
+  const [vista, setVista] = useState(() => { try { return localStorage.getItem('cat_vista') || 'grande' } catch { return 'grande' } })
+  const ciclarVista = () => { const orden = ['grande', 'pequeno', 'lista']; const next = orden[(orden.indexOf(vista) + 1) % 3]; setVista(next); try { localStorage.setItem('cat_vista', next) } catch (e) {} }
+  const vistaIcono = vista === 'grande' ? '▦' : vista === 'pequeno' ? '▪▪' : '☰'
+  const vistaLabel = vista === 'grande' ? 'Grande' : vista === 'pequeno' ? 'Pequeño' : 'Lista'
   const origenesDisp = [...new Set(prods.map(p => p.origenes?.nombre).filter(Boolean))].sort()
   const fl = prods.filter(p =>
     (!f || p.nombre?.toLowerCase().includes(f.toLowerCase()) || p.codigo?.toLowerCase().includes(f.toLowerCase())) &&
@@ -204,6 +208,7 @@ export default function CatalogoScreen(P) {
             <h1 style={{ color: '#fff', fontSize: 18, fontWeight: 800, margin: 0 }}>📦 Catálogo</h1>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button onClick={ciclarVista} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{vistaIcono} {vistaLabel}</button>
             <button onClick={() => { setModoNav(n => !n); setModoSel(false); limpiarSel() }} style={{ background: modoNav ? '#fff' : 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: modoNav ? G.gold : '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{modoNav ? '✕ Salir' : '👁️ Ver'}</button>
             <button onClick={() => { setModoSel(m => !m); setModoNav(false); limpiarSel() }} style={{ background: modoSel ? '#fff' : 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: modoSel ? G.gold : '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{modoSel ? '✕ Cancelar' : '☑️ Sel'}</button>
             <button onClick={() => fileZipRef.current?.click()} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, cursor: 'pointer' }}>📤 ZIP</button>
@@ -240,15 +245,30 @@ export default function CatalogoScreen(P) {
           <button onClick={() => setScr('registrar')} style={{ marginTop: 12, padding: '10px 24px', borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>➕ Registrar</button>
         </div>
       ) : (
-        <div style={{ padding: '8px 12px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        vista === 'lista' ? (
+          <div style={{ padding: '8px 12px 16px' }}>
+            {fl.map(p => (
+              <div key={p.id} onClick={() => modoSel ? toggleSel(p.id) : modoNav ? abrirNav(p) : setViewerProd(p)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 10, padding: 8, marginBottom: 6, border: modoSel && sel.includes(p.id) ? '2px solid ' + G.gold : '1px solid ' + G.border, opacity: p.oculto ? 0.5 : 1, cursor: 'pointer' }}>
+                {modoSel && <div style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 12, background: sel.includes(p.id) ? G.gold : '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 800 }}>{sel.includes(p.id) ? '✓' : ''}</div>}
+                {p.foto_url ? <img src={p.foto_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} /> : <div style={{ width: 48, height: 48, background: G.goldLt, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ fontSize: 18, opacity: 0.3 }}>📦</span></div>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.nombre}{p.oculto ? ' 👁️‍🗨️' : ''}</p>
+                  <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{p.codigo} • Stock: {p.cantidad}{p.color ? ' • ' + p.color : ''}</p>
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 800, color: G.gold, flexShrink: 0 }}>S/{p.precio_venta}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+        <div style={{ padding: '8px 12px 16px', display: 'grid', gridTemplateColumns: vista === 'pequeno' ? '1fr 1fr 1fr' : '1fr 1fr', gap: 8 }}>
           {fl.map(p => (
             <div key={p.id} style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.08)', border: modoSel && sel.includes(p.id) ? '2px solid ' + G.gold : '1px solid ' + G.border, opacity: p.oculto ? 0.5 : 1 }}>
               <div onClick={() => modoSel ? toggleSel(p.id) : modoNav ? abrirNav(p) : setViewerProd(p)} style={{ cursor: 'pointer', position: 'relative' }}>
                 {modoSel && <div style={{ position: 'absolute', top: 6, left: 6, zIndex: 2, width: 26, height: 26, borderRadius: 13, background: sel.includes(p.id) ? G.gold : 'rgba(255,255,255,0.85)', border: '2px solid ' + (sel.includes(p.id) ? G.gold : '#fff'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 800 }}>{sel.includes(p.id) ? '✓' : ''}</div>}
                 {p.oculto && <div style={{ position: 'absolute', top: 6, right: 6, zIndex: 2, background: '#374151', color: '#fff', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6 }}>👁️‍🗨️ Oculto</div>}
                 {p.foto_url
-                  ? <img src={p.foto_url} alt="" style={{ width: '100%', height: 130, objectFit: 'cover' }} />
-                  : <div style={{ width: '100%', height: 130, background: G.goldLt, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 36, opacity: 0.3 }}>📦</span></div>
+                  ? <img src={p.foto_url} alt="" style={{ width: '100%', height: vista === 'pequeno' ? 90 : 130, objectFit: 'cover' }} />
+                  : <div style={{ width: '100%', height: vista === 'pequeno' ? 90 : 130, background: G.goldLt, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 36, opacity: 0.3 }}>📦</span></div>
                 }
                 <div style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(0,0,0,0.45)', borderRadius: 6, padding: '2px 6px', fontSize: 9, color: '#fff', pointerEvents: 'none' }}>{modoSel ? 'Tocar' : modoNav ? '👁️ Abrir' : '👁 Ver'}</div>
               </div>
@@ -259,17 +279,20 @@ export default function CatalogoScreen(P) {
                 </div>
                 <p style={{ fontSize: 11, fontWeight: 600, margin: '3px 0 1px', color: G.text, lineHeight: 1.2 }}>{p.nombre}</p>
                 <p style={{ fontSize: 9, color: G.muted, margin: 0 }}>Stock: {p.cantidad} {p.color ? '• ' + p.color : ''}</p>
-                {p.secciones?.nombre && <p style={{ fontSize: 8, color: G.goldDk, margin: '1px 0 0', fontWeight: 600 }}>🗂️ {p.secciones.nombre}</p>}
+                {vista !== 'pequeno' && p.secciones?.nombre && <p style={{ fontSize: 8, color: G.goldDk, margin: '1px 0 0', fontWeight: 600 }}>🗂️ {p.secciones.nombre}</p>}
+                {vista !== 'pequeno' && (
                 <div style={{ display: 'flex', gap: 3, marginTop: 5 }}>
                   <button onClick={() => { setEditP(p); setScr('registrar') }} style={{ flex: 1, padding: 4, borderRadius: 5, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
                   <button onClick={() => { setVentaP(p); setScr('venta') }} disabled={p.cantidad <= 0} style={{ flex: 1, padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? G.gold : '#ccc', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Vender</button>
                   {p.foto_url && <button onClick={() => downloadPhoto(p.foto_url, p.codigo)} style={{ padding: 4, borderRadius: 5, border: '1px solid ' + G.border, background: 'transparent', color: G.gold, fontSize: 9, cursor: 'pointer' }}>📥</button>}
                   <button onClick={() => eliminar(p)} style={{ padding: 4, borderRadius: 5, border: '1px solid #eee', background: 'transparent', color: G.err, fontSize: 9, cursor: 'pointer' }}>🗑</button>
                 </div>
+                )}
               </div>
             </div>
           ))}
         </div>
+        )
       )}
 
       {/* Barra flotante: descargar ZIP de seleccionados */}
