@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase, subirFoto, comprimirImagen } from '../supabase'
 import { G } from '../constants'
 import { downloadPhoto, exportCSV } from '../helpers'
@@ -36,6 +36,27 @@ export default function CatalogoScreen(P) {
   const toggleSel = (id) => setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
   const selTodos = () => setSel(fl.map(p => p.id))
   const limpiarSel = () => setSel([])
+
+  // ── Drag-select (pintar al arrastrar, solo desktop en modo selección) ──
+  const [arrastrando, setArrastrando] = useState(false)
+  const [modoArrastre, setModoArrastre] = useState(true) // true = marcar, false = desmarcar
+  const iniciarArrastre = (p) => {
+    const yaSel = sel.includes(p.id)
+    const marcar = !yaSel
+    setModoArrastre(marcar)
+    setArrastrando(true)
+    setSel(s => marcar ? (s.includes(p.id) ? s : [...s, p.id]) : s.filter(x => x !== p.id))
+  }
+  const pintarArrastre = (p) => {
+    if (!arrastrando) return
+    setSel(s => modoArrastre ? (s.includes(p.id) ? s : [...s, p.id]) : s.filter(x => x !== p.id))
+  }
+  useEffect(() => {
+    if (!arrastrando) return
+    const fin = () => setArrastrando(false)
+    window.addEventListener('mouseup', fin)
+    return () => window.removeEventListener('mouseup', fin)
+  }, [arrastrando])
 
   // ── Acciones masivas ──
   const ocultarSel = async (valor) => {
@@ -248,7 +269,11 @@ export default function CatalogoScreen(P) {
         vista === 'lista' ? (
           <div style={{ padding: '8px 12px 16px' }}>
             {fl.map(p => (
-              <div key={p.id} onClick={() => modoSel ? toggleSel(p.id) : modoNav ? abrirNav(p) : setViewerProd(p)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 10, padding: 8, marginBottom: 6, border: modoSel && sel.includes(p.id) ? '2px solid ' + G.gold : '1px solid ' + G.border, opacity: p.oculto ? 0.5 : 1, cursor: 'pointer' }}>
+              <div key={p.id}
+                onMouseDown={() => { if (modoSel) iniciarArrastre(p) }}
+                onMouseEnter={() => { if (modoSel) pintarArrastre(p) }}
+                onClick={() => modoSel ? null : modoNav ? abrirNav(p) : setViewerProd(p)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 10, padding: 8, marginBottom: 6, border: modoSel && sel.includes(p.id) ? '2px solid ' + G.gold : '1px solid ' + G.border, opacity: p.oculto ? 0.5 : 1, cursor: 'pointer', userSelect: modoSel ? 'none' : 'auto' }}>
                 {modoSel && <div style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 12, background: sel.includes(p.id) ? G.gold : '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 800 }}>{sel.includes(p.id) ? '✓' : ''}</div>}
                 {p.foto_url ? <img src={p.foto_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} /> : <div style={{ width: 48, height: 48, background: G.goldLt, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ fontSize: 18, opacity: 0.3 }}>📦</span></div>}
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -262,8 +287,12 @@ export default function CatalogoScreen(P) {
         ) : (
         <div style={{ padding: '8px 12px 16px', display: 'grid', gridTemplateColumns: vista === 'pequeno' ? '1fr 1fr 1fr' : '1fr 1fr', gap: 8 }}>
           {fl.map(p => (
-            <div key={p.id} style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.08)', border: modoSel && sel.includes(p.id) ? '2px solid ' + G.gold : '1px solid ' + G.border, opacity: p.oculto ? 0.5 : 1 }}>
-              <div onClick={() => modoSel ? toggleSel(p.id) : modoNav ? abrirNav(p) : setViewerProd(p)} style={{ cursor: 'pointer', position: 'relative' }}>
+            <div key={p.id} style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.08)', border: modoSel && sel.includes(p.id) ? '2px solid ' + G.gold : '1px solid ' + G.border, opacity: p.oculto ? 0.5 : 1, userSelect: modoSel ? 'none' : 'auto' }}>
+              <div
+                onMouseDown={() => { if (modoSel) iniciarArrastre(p) }}
+                onMouseEnter={() => { if (modoSel) pintarArrastre(p) }}
+                onClick={() => modoSel ? null : modoNav ? abrirNav(p) : setViewerProd(p)}
+                style={{ cursor: 'pointer', position: 'relative' }}>
                 {modoSel && <div style={{ position: 'absolute', top: 6, left: 6, zIndex: 2, width: 26, height: 26, borderRadius: 13, background: sel.includes(p.id) ? G.gold : 'rgba(255,255,255,0.85)', border: '2px solid ' + (sel.includes(p.id) ? G.gold : '#fff'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 800 }}>{sel.includes(p.id) ? '✓' : ''}</div>}
                 {p.oculto && <div style={{ position: 'absolute', top: 6, right: 6, zIndex: 2, background: '#374151', color: '#fff', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6 }}>👁️‍🗨️ Oculto</div>}
                 {p.foto_url
