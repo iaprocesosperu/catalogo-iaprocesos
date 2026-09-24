@@ -6,7 +6,7 @@ import { LineSel } from '../components/index'
 import PhotoViewerModal from '../components/PhotoViewerModal'
 
 export default function CatalogoScreen(P) {
-  const { tit, lineas, linAct, setLinAct, prods, setScr, setEditP, setVentaP, logout, notify, loadAll, emp, setRetorno } = P
+  const { tit, lineas, linAct, setLinAct, prods, oris, setScr, setEditP, setVentaP, logout, notify, loadAll, emp, setRetorno } = P
   const [f, setF] = useState('')
   const [fOrigen, setFOrigen] = useState('')
   const [viewerProd, setViewerProd] = useState(null)
@@ -78,6 +78,22 @@ export default function CatalogoScreen(P) {
       await supabase.from('productos').update({ activo: false }).in('id', sel)
       notify(`✅ ${sel.length} eliminados`)
       limpiarSel(); await loadAll()
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setTrabajando('')
+  }
+
+  // ── Cambiar origen masivo ──
+  const [pideOrigen, setPideOrigen] = useState(false)
+  const [nuevoOrigen, setNuevoOrigen] = useState('')
+  const cambiarOrigen = async () => {
+    if (!nuevoOrigen) { notify('Elige un origen', 'error'); return }
+    const oNom = (oris || []).find(o => o.id === parseInt(nuevoOrigen))?.nombre || ''
+    if (!confirm(`¿Mover ${sel.length} productos al origen "${oNom}"?`)) return
+    setPideOrigen(false); setTrabajando('Cambiando origen...')
+    try {
+      await supabase.from('productos').update({ origen_id: parseInt(nuevoOrigen) }).in('id', sel)
+      notify(`✅ ${sel.length} movidos a ${oNom}`)
+      limpiarSel(); setNuevoOrigen(''); await loadAll()
     } catch (e) { notify('Error: ' + e.message, 'error') }
     setTrabajando('')
   }
@@ -332,9 +348,10 @@ export default function CatalogoScreen(P) {
           <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: G.text, textAlign: 'center' }}>{sel.length} seleccionados</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <button onClick={() => setPideTipo(true)} style={{ padding: 11, borderRadius: 10, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>📦 Descargar ZIP</button>
+            <button onClick={() => { setNuevoOrigen(''); setPideOrigen(true) }} style={{ padding: 11, borderRadius: 10, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>📋 Cambiar origen</button>
             <button onClick={() => ocultarSel(true)} style={{ padding: 11, borderRadius: 10, border: 'none', background: '#374151', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>👁️‍🗨️ Ocultar</button>
             <button onClick={() => ocultarSel(false)} style={{ padding: 11, borderRadius: 10, border: 'none', background: G.ok, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>👁️ Mostrar</button>
-            <button onClick={eliminarSel} style={{ padding: 11, borderRadius: 10, border: 'none', background: G.err, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>🗑️ Eliminar</button>
+            <button onClick={eliminarSel} style={{ padding: 11, borderRadius: 10, border: 'none', background: G.err, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', gridColumn: '1 / -1' }}>🗑️ Eliminar</button>
           </div>
         </div>
       )}
@@ -363,6 +380,22 @@ export default function CatalogoScreen(P) {
               </div>
               <button onClick={editarDesdeNav} style={{ width: '100%', padding: 13, marginTop: 8, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>✏️ Editar en catálogo</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Diálogo: cambiar origen */}
+      {pideOrigen && (
+        <div onClick={() => setPideOrigen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 150, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 360 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 16, color: G.text }}>📋 Cambiar origen</h3>
+            <p style={{ fontSize: 12, color: G.muted, margin: '0 0 14px' }}>Mover {sel.length} productos a:</p>
+            <select value={nuevoOrigen} onChange={e => setNuevoOrigen(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid ' + G.border, fontSize: 14, background: '#fff', color: G.text, marginBottom: 14 }}>
+              <option value="">— Elige un origen —</option>
+              {(oris || []).map(o => <option key={o.id} value={o.id}>{o.nombre}{o.es_granel ? ' 🌾 GRANEL' : ''}</option>)}
+            </select>
+            <button onClick={cambiarOrigen} style={{ width: '100%', padding: 13, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Mover</button>
+            <button onClick={() => setPideOrigen(false)} style={{ width: '100%', padding: 10, marginTop: 8, borderRadius: 10, border: 'none', background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
           </div>
         </div>
       )}
