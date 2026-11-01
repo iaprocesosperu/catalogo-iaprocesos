@@ -13,6 +13,116 @@ export default function CatalogoScreen(P) {
   const [ocultarAgotados, setOcultarAgotados] = useState(true)
   const [verOcultos, setVerOcultos] = useState(false)
   const [verGenericos, setVerGenericos] = useState(false)
+
+  // ── CARRITOS (POS multi-cliente) ──
+  const [carritos, setCarritos] = useState([])
+  const [carActivo, setCarActivo] = useState(null) // id del carrito activo
+  const [carItems, setCarItems] = useState([]) // items del carrito activo
+  const [carOpen, setCarOpen] = useState(false) // panel abierto
+  const [carClientes, setCarClientes] = useState([])
+  const [carLiq, setCarLiq] = useState(false)
+
+  const cargarCarritos = async () => {
+    const { data } = await supabase.from('carritos').select('*,clientes(nombre)').eq('empresa_id', eid).eq('estado', 'abierto').order('created_at')
+    setCarritos(data || [])
+    if (data && data.length && !data.find(c => c.id === carActivo)) setCarActivo(data[0].id)
+    if (!data || !data.length) { setCarActivo(null); setCarItems([]) }
+  }
+  useEffect(() => { if (eid) cargarCarritos() }, [eid])
+  useEffect(() => { (async () => { const { data } = await supabase.from('clientes').select('id,nombre').eq('empresa_id', eid).eq('activo', true).order('nombre'); if (data) setCarClientes(data) })() }, [eid])
+
+  const cargarItems = async (cid) => {
+    if (!cid) { setCarItems([]); return }
+    const { data } = await supabase.from('carrito_items').select('*').eq('carrito_id', cid).order('created_at')
+    setCarItems(data || [])
+  }
+  useEffect(() => { cargarItems(carActivo) }, [carActivo])
+
+  const nuevoCarrito = async () => {
+    const { data, error } = await supabase.from('carritos').insert({ empresa_id: eid, estado: 'abierto', nombre: 'Carrito ' + (carritos.length + 1) }).select().single()
+    if (error) { notify('Error: ' + error.message, 'error'); return }
+    await cargarCarritos(); setCarActivo(data.id); setCarItems([])
+  }
+  const cambiarClienteCarrito = async (cid, clienteId) => {
+    await supabase.from('carritos').update({ cliente_id: clienteId || null }).eq('id', cid)
+    await cargarCarritos()
+  }
+  const cerrarCarritoVacio = async (cid) => {
+    if (!confirm('¿Descartar este carrito?')) return
+    await supabase.from('carritos').delete().eq('id', cid)
+    await cargarCarritos()
+  }
+
+  const agregarAlCarrito = async (p, precioUnit) => {
+    let cid = carActivo
+    if (!cid) { // crear uno si no hay activo
+      const { data } = await supabase.from('carritos').insert({ empresa_id: eid, estado: 'abierto', nombre: 'Carrito 1' }).select().single()
+      cid = data.id; await cargarCarritos(); setCarActivo(cid)
+    }
+    // proveedor del origen
+    let provId = null
+    if (p.origen_id) { const { data: og } = await supabase.from('origenes').select('proveedor_id').eq('id', p.origen_id).single(); provId = og?.proveedor_id || null }
+    // ¿ya está en el carrito? suma cantidad
+    const { data: existe } = await supabase.from('carrito_items').select('*').eq('carrito_id', cid).eq('producto_id', p.id).maybeSingle()
+    if (existe) {
+      await supabase.from('carrito_items').update({ cantidad: existe.cantidad + 1 }).eq('id', existe.id)
+    } else {
+      await supabase.from('carrito_items').insert({ carrito_id: cid, producto_id: p.id, codigo: p.codigo, nombre: p.nombre, precio_costo: p.precio_costo || 0, precio_unit: precioUnit ?? p.precio_venta, cantidad: 1, origen_id: p.origen_id || null, proveedor_id: provId })
+    }
+    await cargarItems(cid); await cargarCarritos()
+    notify('🛒 ' + p.nombre + ' al carrito')
+  }
+
+  const setItemCant = async (item, cant) => {
+    const n = parseInt(cant) || 0
+    if (n <= 0) { await supabase.from('carrito_items').delete().eq('id', item.id) }
+    else { await supabase.from('carrito_items').update({ cantidad: n }).eq('id', item.id) }
+    await cargarItems(carActivo)
+  }
+  const setItemPrecio = async (item, precio) => {
+    const p = parseFloat(precio)
+    if (isNaN(p)) return
+    await supabase.from('carrito_items').update({ precio_unit: p }).eq('id', item.id)
+    await cargarItems(carActivo)
+  }
+  const quitarItem = async (item) => { await supabase.from('carrito_items').delete().eq('id', item.id); await cargarItems(carActivo) }
+
+  const totalCarrito = carItems.reduce((s, it) => s + it.precio_unit * it.cantidad, 0)
+
+  const liquidarCarrito = async () => {
+    if (!carItems.length) { notify('El carrito está vacío', 'error'); return }
+    const car = carritos.find(c => c.id === carActivo)
+    setCarLiq(true)
+    try {
+      // 1) una venta por prenda
+      for (const it of carItems) {
+        await supabase.from('ventas').insert({
+          empresa_id: eid, producto_id: it.producto_id, cliente_id: car?.cliente_id || null,
+          codigo_producto: it.codigo, nombre_producto: it.nombre,
+          precio_costo: it.precio_costo || 0, precio_venta_original: it.precio_unit, precio_venta_real: it.precio_unit,
+          cantidad: it.cantidad, total: it.precio_unit * it.cantidad, metodo_pago: 'Efectivo', tipo_entrega: 'Tienda',
+          estado: 'entregado', costo_devuelto: false, proveedor_id: it.proveedor_id || null, origen_id: it.origen_id || null
+        })
+        // 2) descontar stock
+        if (it.producto_id) {
+          const { data: prod } = await supabase.from('productos').select('cantidad, equivalente_granel, origen_id').eq('id', it.producto_id).single()
+          if (prod) {
+            if (prod.equivalente_granel && prod.origen_id) {
+              const { data: og } = await supabase.from('origenes').select('stock_granel').eq('id', prod.origen_id).single()
+              if (og) await supabase.from('origenes').update({ stock_granel: (og.stock_granel || 0) - (prod.equivalente_granel * it.cantidad) }).eq('id', prod.origen_id)
+            } else {
+              await supabase.from('productos').update({ cantidad: (prod.cantidad || 0) - it.cantidad }).eq('id', it.producto_id)
+            }
+          }
+        }
+      }
+      // 3) cerrar carrito
+      await supabase.from('carritos').update({ estado: 'liquidado' }).eq('id', carActivo)
+      notify(`✅ Carrito liquidado: S/${totalCarrito.toFixed(2)}`)
+      await cargarCarritos(); await loadAll()
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setCarLiq(false)
+  }
   // Venta rápida
   const [vrOpen, setVrOpen] = useState(false)
   const [vrMas, setVrMas] = useState(false)
@@ -22,6 +132,40 @@ export default function CatalogoScreen(P) {
   const [vrFoto, setVrFoto] = useState(null) // {blob, preview}
   const vrFileRef = useRef(null)
   useEffect(() => { if (vrOpen && !vrProv.length) { (async () => { const { data } = await supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre'); if (data) setVrProv(data) })() } }, [vrOpen])
+
+  const ventaRapidaAlCarrito = async () => {
+    if (!vr.nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
+    const precio = parseFloat(vr.precio)
+    const cantVender = parseInt(vr.cantidad) || 1
+    if (isNaN(precio) || precio <= 0) { notify('Precio inválido', 'error'); return }
+    setVrSaving(true)
+    try {
+      const { data: cods } = await supabase.from('productos').select('codigo').eq('empresa_id', eid)
+      const nums = (cods || []).map(p => parseInt(p.codigo)).filter(n => !isNaN(n))
+      const codigo = String(nums.length ? Math.max(...nums) + 1 : 1).padStart(3, '0')
+      const costo = vr.costo !== '' ? parseFloat(vr.costo) : 0
+      const stockCrear = vr.stock_extra !== '' ? (parseInt(vr.stock_extra) || 0) : cantVender
+      let foto_url = null
+      if (vrFoto?.blob) { const comp = await comprimirImagen(new File([vrFoto.blob], 'vr.jpg', { type: vrFoto.blob.type || 'image/jpeg' })); foto_url = await subirFoto(comp, codigo + '_' + Date.now()) }
+      const { data: prod, error: e1 } = await supabase.from('productos').insert({
+        empresa_id: eid, linea_id: lid, codigo, nombre: vr.nombre.trim(),
+        precio_costo: costo, precio_venta: precio, cantidad: stockCrear,
+        color: vr.color || null, origen_id: vr.origen_id || null, es_generico: true, activo: true, foto_url
+      }).select().single()
+      if (e1) throw e1
+      if (foto_url) await supabase.from('fotos_producto').insert({ producto_id: prod.id, url: foto_url, es_principal: true, orden: 0 })
+      // agregar al carrito (cantVender veces → una línea con esa cantidad)
+      let provId = vr.proveedor_id || null
+      if (!provId && vr.origen_id) { const { data: og } = await supabase.from('origenes').select('proveedor_id').eq('id', vr.origen_id).single(); provId = og?.proveedor_id || null }
+      let cid = carActivo
+      if (!cid) { const { data: nc } = await supabase.from('carritos').insert({ empresa_id: eid, estado: 'abierto', nombre: 'Carrito 1' }).select().single(); cid = nc.id; setCarActivo(cid) }
+      await supabase.from('carrito_items').insert({ carrito_id: cid, producto_id: prod.id, codigo, nombre: vr.nombre.trim(), precio_costo: costo, precio_unit: precio, cantidad: cantVender, origen_id: vr.origen_id || null, proveedor_id: provId })
+      notify('🛒 ' + vr.nombre + ' al carrito')
+      setVrOpen(false); setVrMas(false); setVrFoto(null); setVr({ nombre: '', precio: '', cantidad: '1', costo: '', proveedor_id: '', origen_id: '', color: '', metodo: 'Efectivo', stock_extra: '' })
+      await cargarCarritos(); await cargarItems(cid); await loadAll()
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setVrSaving(false)
+  }
 
   const setFotoVr = (file) => { if (!file) return; setVrFoto({ blob: file, preview: URL.createObjectURL(file) }) }
   useEffect(() => {
@@ -313,6 +457,7 @@ export default function CatalogoScreen(P) {
             <h1 style={{ color: '#fff', fontSize: 18, fontWeight: 800, margin: 0 }}>📦 Catálogo</h1>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button onClick={() => setCarOpen(true)} style={{ background: carritos.length ? '#059669' : 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>🛒 Carritos{carritos.length ? ' (' + carritos.length + ')' : ''}</button>
             <button onClick={() => { setVrOpen(true); setVrMas(false) }} style={{ background: '#fff', border: 'none', borderRadius: 8, padding: '6px 10px', color: G.gold, fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>⚡ Venta rápida</button>
             <button onClick={ciclarVista} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{vistaIcono} {vistaLabel}</button>
             <button onClick={() => { setModoNav(n => !n); setModoSel(false); limpiarSel() }} style={{ background: modoNav ? '#fff' : 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: modoNav ? G.gold : '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{modoNav ? '✕ Salir' : '👁️ Ver'}</button>
@@ -400,11 +545,13 @@ export default function CatalogoScreen(P) {
                 <div style={{ display: 'flex', gap: 3, marginTop: 5 }}>
                   <button onClick={() => { setEditP(p); setScr('registrar') }} style={{ flex: 1, padding: 4, borderRadius: 5, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
                   <button onClick={() => { setVentaP(p); setScr('venta') }} disabled={p.cantidad <= 0} style={{ flex: 1, padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? G.gold : '#ccc', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Vender</button>
+                  <button onClick={() => agregarAlCarrito(p)} disabled={p.cantidad <= 0} style={{ padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? '#059669' : '#ccc', color: '#fff', fontSize: 11, cursor: 'pointer' }}>🛒</button>
                 </div>
                 ) : (
                 <div style={{ display: 'flex', gap: 3, marginTop: 5 }}>
                   <button onClick={() => { setEditP(p); setScr('registrar') }} style={{ flex: 1, padding: 4, borderRadius: 5, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
                   <button onClick={() => { setVentaP(p); setScr('venta') }} disabled={p.cantidad <= 0} style={{ flex: 1, padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? G.gold : '#ccc', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Vender</button>
+                  <button onClick={() => agregarAlCarrito(p)} disabled={p.cantidad <= 0} style={{ padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? '#059669' : '#ccc', color: '#fff', fontSize: 11, cursor: 'pointer' }}>🛒</button>
                   {p.foto_url && <button onClick={() => downloadPhoto(p.foto_url, p.codigo)} style={{ padding: 4, borderRadius: 5, border: '1px solid ' + G.border, background: 'transparent', color: G.gold, fontSize: 9, cursor: 'pointer' }}>📥</button>}
                   <button onClick={() => eliminar(p)} style={{ padding: 4, borderRadius: 5, border: '1px solid #eee', background: 'transparent', color: G.err, fontSize: 9, cursor: 'pointer' }}>🗑</button>
                 </div>
@@ -453,6 +600,71 @@ export default function CatalogoScreen(P) {
                 <button onClick={() => setNavIdx(i => Math.min(fl.length - 1, i + 1))} disabled={navIdx >= fl.length - 1} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.border, background: navIdx >= fl.length - 1 ? '#f5f5f5' : '#fff', color: navIdx >= fl.length - 1 ? '#bbb' : G.text, fontSize: 13, fontWeight: 700, cursor: navIdx >= fl.length - 1 ? 'default' : 'pointer' }}>Siguiente ›</button>
               </div>
               <button onClick={editarDesdeNav} style={{ width: '100%', padding: 13, marginTop: 8, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>✏️ Editar en catálogo</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Panel de carritos */}
+      {carOpen && (
+        <div onClick={() => setCarOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 170, padding: 12 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 460, maxHeight: '94vh', overflow: 'auto' }}>
+            <div style={{ background: '#059669', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 2 }}>
+              <p style={{ color: '#fff', fontSize: 15, fontWeight: 800, margin: 0 }}>🛒 Carritos de venta</p>
+              <button onClick={() => setCarOpen(false)} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 8, width: 30, height: 30, color: '#fff', fontSize: 16, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ padding: 14 }}>
+              {/* Pestañas de carritos */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                {carritos.map(c => (
+                  <button key={c.id} onClick={() => setCarActivo(c.id)} style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid ' + (carActivo === c.id ? '#059669' : G.border), background: carActivo === c.id ? '#059669' : '#fff', color: carActivo === c.id ? '#fff' : G.text, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    {c.clientes?.nombre || c.nombre || 'Carrito'}
+                  </button>
+                ))}
+                <button onClick={nuevoCarrito} style={{ padding: '7px 12px', borderRadius: 10, border: '1px dashed ' + G.gold, background: '#fff', color: G.gold, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>+ Nuevo</button>
+              </div>
+
+              {!carActivo ? (
+                <div style={{ textAlign: 'center', padding: 30, color: G.muted }}>
+                  <p style={{ fontSize: 36 }}>🛒</p>
+                  <p>No hay carritos abiertos.</p>
+                  <button onClick={nuevoCarrito} style={{ marginTop: 8, padding: '10px 20px', borderRadius: 8, border: 'none', background: '#059669', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Abrir carrito</button>
+                </div>
+              ) : (
+                <>
+                  {/* Cliente del carrito */}
+                  <label style={{ fontSize: 11, color: G.muted }}>Cliente de este carrito</label>
+                  <select value={carritos.find(c => c.id === carActivo)?.cliente_id || ''} onChange={e => cambiarClienteCarrito(carActivo, e.target.value)} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 12, boxSizing: 'border-box' }}>
+                    <option value="">— Sin cliente —</option>
+                    {carClientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+
+                  {/* Items */}
+                  {carItems.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: 24, color: G.muted, fontSize: 13 }}>Carrito vacío. Agrega prendas desde el catálogo con el botón 🛒</div>
+                  ) : carItems.map(it => (
+                    <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid ' + G.border }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 12, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.nombre}</p>
+                        <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{it.codigo}</p>
+                      </div>
+                      <input type="number" value={it.cantidad} onChange={e => setItemCant(it, e.target.value)} style={{ width: 44, padding: '5px', borderRadius: 6, border: '1px solid ' + G.border, fontSize: 12, textAlign: 'center' }} />
+                      <span style={{ fontSize: 11, color: G.muted }}>×</span>
+                      <input type="number" value={it.precio_unit} onChange={e => setItemPrecio(it, e.target.value)} style={{ width: 56, padding: '5px', borderRadius: 6, border: '1px solid ' + G.border, fontSize: 12, textAlign: 'right' }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: G.gold, width: 52, textAlign: 'right' }}>S/{(it.precio_unit * it.cantidad).toFixed(0)}</span>
+                      <button onClick={() => quitarItem(it)} style={{ padding: '4px 7px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 11, cursor: 'pointer' }}>✕</button>
+                    </div>
+                  ))}
+
+                  {/* Total + acciones */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0' }}>
+                    <span style={{ fontSize: 13, color: G.muted }}>{carItems.length} prendas</span>
+                    <span style={{ fontSize: 22, fontWeight: 900, color: '#059669' }}>Total: S/{totalCarrito.toFixed(2)}</span>
+                  </div>
+                  <button onClick={liquidarCarrito} disabled={carLiq || !carItems.length} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: carItems.length ? '#059669' : '#ccc', color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>{carLiq ? '⏳ Liquidando...' : '💰 Liquidar venta'}</button>
+                  <button onClick={() => cerrarCarritoVacio(carActivo)} style={{ width: '100%', padding: 10, marginTop: 8, borderRadius: 10, border: '1px solid ' + G.border, background: 'transparent', color: G.err, fontSize: 13, cursor: 'pointer' }}>🗑 Descartar carrito</button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -513,7 +725,10 @@ export default function CatalogoScreen(P) {
                 <option value="Efectivo">Efectivo</option><option value="Yape">Yape</option><option value="Plin">Plin</option><option value="Transferencia">Transferencia</option>
               </select>
 
-              <button onClick={ventaRapida} disabled={vrSaving} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>{vrSaving ? '⏳...' : '✅ Vender'}</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => ventaRapidaAlCarrito()} disabled={vrSaving} style={{ flex: 1, padding: 14, borderRadius: 10, border: '1px solid #059669', background: '#fff', color: '#059669', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>🛒 Al carrito</button>
+                <button onClick={ventaRapida} disabled={vrSaving} style={{ flex: 1, padding: 14, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>{vrSaving ? '⏳...' : '✅ Vender'}</button>
+              </div>
             </div>
           </div>
         </div>
