@@ -667,8 +667,11 @@ export function ClientesScr(P) {
 
   const guardar = async () => {
     if (!f.nombre) { notify('Nombre obligatorio', 'error'); return }
-    if (editCli) { await supabase.from('clientes').update(f).eq('id', editCli.id); notify('Actualizado') }
-    else { const cod = 'C' + String(clis.length + 1).padStart(4, '0'); await supabase.from('clientes').insert({ empresa_id: eid, codigo: cod, ...f }); notify('Creado') }
+    const norm = f.nombre.trim().toLowerCase()
+    const dup = (clis || []).some(c => c.nombre?.trim().toLowerCase() === norm && (!editCli || c.id !== editCli.id))
+    if (dup) { notify('Ya existe un cliente con ese nombre', 'error'); return }
+    if (editCli) { await supabase.from('clientes').update({ ...f, nombre: f.nombre.trim() }).eq('id', editCli.id); notify('Actualizado') }
+    else { const cod = 'C' + String(clis.length + 1).padStart(4, '0'); await supabase.from('clientes').insert({ empresa_id: eid, codigo: cod, ...f, nombre: f.nombre.trim() }); notify('Creado') }
     setShowAdd(false); setEditCli(null); await loadAll()
   }
 
@@ -768,11 +771,66 @@ export function StockScr(P) {
 
 /* ═══ HISTORIAL VENTAS ═══ */
 export function HistorialScr(P) {
-  const { tit, vents, lid, setScr, notify, loadAll } = P
+  const { tit, vents, clis, eid, lid, setScr, notify, loadAll } = P
   const [tab, setTab] = useState('lista')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
   const [eliminando, setEliminando] = useState(false)
+  const [buscar, setBuscar] = useState('')
+  const [filCliente, setFilCliente] = useState('')
+  const [filPendiente, setFilPendiente] = useState(false)
+  const [editV, setEditV] = useState(null) // venta en edición
+  const [ef, setEf] = useState({ cantidad: '', precio_venta_real: '', cliente_id: '', metodo_pago: '', tipo_entrega: '', nota: '', costo_devuelto: false })
+  const [guardandoV, setGuardandoV] = useState(false)
+
+  const abrirEdit = (v) => {
+    setEditV(v)
+    setEf({ cantidad: String(v.cantidad), precio_venta_real: String(v.precio_venta_real), cliente_id: v.cliente_id || '', metodo_pago: v.metodo_pago || '', tipo_entrega: v.tipo_entrega || '', nota: v.nota || '', costo_devuelto: !!v.costo_devuelto })
+  }
+
+  const guardarEdit = async () => {
+    if (!editV) return
+    const nuevaCant = parseInt(ef.cantidad) || 0
+    const nuevoPV = parseFloat(ef.precio_venta_real)
+    if (nuevaCant <= 0) { notify('Cantidad inválida', 'error'); return }
+    if (isNaN(nuevoPV)) { notify('Precio inválido', 'error'); return }
+    setGuardandoV(true)
+    try {
+      const difCant = nuevaCant - editV.cantidad // positivo = se vendió más → descontar stock
+      // Ajustar stock si cambió la cantidad
+      if (difCant !== 0 && editV.producto_id) {
+        const { data: prod } = await supabase.from('productos').select('cantidad, equivalente_granel, origen_id').eq('id', editV.producto_id).single()
+        if (prod) {
+          if (prod.equivalente_granel && prod.origen_id) {
+            const { data: origen } = await supabase.from('origenes').select('stock_granel').eq('id', prod.origen_id).single()
+            if (origen) await supabase.from('origenes').update({ stock_granel: (origen.stock_granel || 0) - (prod.equivalente_granel * difCant) }).eq('id', prod.origen_id)
+          } else {
+            await supabase.from('productos').update({ cantidad: (prod.cantidad || 0) - difCant }).eq('id', editV.producto_id)
+          }
+        }
+      }
+      await supabase.from('ventas').update({
+        cantidad: nuevaCant,
+        precio_venta_real: nuevoPV,
+        total: nuevoPV * nuevaCant,
+        cliente_id: ef.cliente_id || null,
+        metodo_pago: ef.metodo_pago || null,
+        tipo_entrega: ef.tipo_entrega || null,
+        nota: ef.nota || null,
+        costo_devuelto: ef.costo_devuelto
+      }).eq('id', editV.id)
+      notify('✅ Venta actualizada')
+      setEditV(null); await loadAll()
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setGuardandoV(false)
+  }
+
+  const toggleDevuelto = async (v) => {
+    try {
+      await supabase.from('ventas').update({ costo_devuelto: !v.costo_devuelto }).eq('id', v.id)
+      await loadAll()
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+  }
 
   const eliminarVenta = async (v) => {
     if (!confirm(`¿Eliminar venta de "${v.nombre_producto}"? Se devolverá el stock.`)) return
@@ -803,11 +861,20 @@ export function HistorialScr(P) {
   const fl = vents.filter(v => {
     if (desde && new Date(v.created_at) < new Date(desde)) return false
     if (hasta && new Date(v.created_at) > new Date(hasta + 'T23:59:59')) return false
+    if (filCliente && String(v.cliente_id) !== String(filCliente)) return false
+    if (filPendiente && v.costo_devuelto) return false
+    if (buscar) {
+      const t = buscar.toLowerCase()
+      const enProd = (v.nombre_producto || '').toLowerCase().includes(t) || (v.codigo_producto || '').toLowerCase().includes(t)
+      const enCli = (v.clientes?.nombre || '').toLowerCase().includes(t)
+      if (!enProd && !enCli) return false
+    }
     return true
   }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
   const tV = fl.reduce((s, v) => s + v.total, 0)
   const tG = fl.reduce((s, v) => s + (v.precio_venta_real - v.precio_costo) * v.cantidad, 0)
+  const tPend = fl.filter(v => !v.costo_devuelto).reduce((s, v) => s + (v.precio_costo || 0) * v.cantidad, 0)
 
   const exp = () => {
     exportCSV(fl, 'ventas_' + new Date().toISOString().split('T')[0], [
@@ -818,7 +885,8 @@ export function HistorialScr(P) {
       { k: 'precio_venta_original', l: 'P.Venta Orig' }, { k: 'precio_venta_real', l: 'P.Venta Real' },
       { k: 'total', l: 'Total' }, { k: r => ((r.precio_venta_real - r.precio_costo) * r.cantidad).toFixed(2), l: 'Ganancia' },
       { k: 'metodo_pago', l: 'Pago' }, { k: 'tipo_entrega', l: 'Entrega' },
-      { k: r => r.clientes?.nombre || '', l: 'Cliente' }
+      { k: r => r.clientes?.nombre || '', l: 'Cliente' },
+      { k: r => r.costo_devuelto ? 'SI' : 'NO', l: 'Costo devuelto' }
     ]); notify('Exportado')
   }
 
@@ -863,6 +931,20 @@ export function HistorialScr(P) {
           <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ flex: 1, minWidth: 120, padding: '6px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12 }} />
           {(desde || hasta) && <button onClick={() => { setDesde(''); setHasta('') }} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: G.err, color: '#fff', fontSize: 11, cursor: 'pointer' }}>✕</button>}
         </div>
+        {/* Búsqueda + filtro cliente + pendientes */}
+        <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="🔍 Buscar por producto, código o cliente..." style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box', marginBottom: 8 }} />
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <select value={filCliente} onChange={e => setFilCliente(e.target.value)} style={{ flex: 1, minWidth: 160, padding: '8px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12, background: '#fff', color: G.text }}>
+            <option value="">👥 Todos los clientes</option>
+            {(clis || []).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+          <button onClick={() => setFilPendiente(v => !v)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + (filPendiente ? G.err : G.border), background: filPendiente ? G.err : '#fff', color: filPendiente ? '#fff' : G.text, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{filPendiente ? '✓ ' : ''}⏳ Falta devolver</button>
+        </div>
+        {tPend > 0 && (
+          <div style={{ background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#92400E', fontWeight: 700 }}>
+            💰 Costo pendiente de devolver a proveedores: S/{tPend.toFixed(2)}
+          </div>
+        )}
         {tab === 'lista' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -870,7 +952,7 @@ export function HistorialScr(P) {
               <button onClick={exp} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>📥 Excel</button>
             </div>
             {fl.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: G.muted }}><p style={{ fontSize: 32 }}>📋</p><p>No hay ventas</p></div>
-              : fl.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p></div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ marginTop: 4, display: 'block', padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑 Eliminar</button></div></div></div>))}
+              : fl.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p></div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<div style={{ marginTop: 4, display: 'flex', gap: 3, justifyContent: 'flex-end' }}><button onClick={() => toggleDevuelto(v)} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: v.costo_devuelto ? '#D1FAE5' : '#FEF3C7', color: v.costo_devuelto ? '#065F46' : '#92400E', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{v.costo_devuelto ? '✓ Devuelto' : '⏳ Falta'}</button><button onClick={() => abrirEdit(v)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>✏️</button><button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑</button></div></div></div></div>))}
           </>
         )}
         {tab === 'analisis' && (
@@ -886,6 +968,47 @@ export function HistorialScr(P) {
               {porMetodo.map(m => (<div key={m.metodo} style={{ background: G.goldLt, borderRadius: 10, padding: '10px 14px', textAlign: 'center', minWidth: 100 }}><p style={{ fontSize: 18, margin: 0 }}>{m.metodo === 'Efectivo' ? '💵' : '📱'}</p><p style={{ fontSize: 12, fontWeight: 700, margin: '4px 0 2px' }}>{m.metodo}</p><p style={{ fontSize: 11, color: G.gold, fontWeight: 800, margin: 0 }}>S/{m.total.toFixed(0)}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{m.cant} ventas</p></div>))}
             </div>
           </>
+        )}
+
+        {editV && (
+          <div onClick={() => setEditV(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 150, padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 400, maxHeight: '92vh', overflow: 'auto' }}>
+              <div style={{ background: G.gold, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
+                <p style={{ color: '#fff', fontSize: 15, fontWeight: 800, margin: 0 }}>✏️ Editar venta</p>
+                <button onClick={() => setEditV(null)} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 8, width: 30, height: 30, color: '#fff', fontSize: 16, cursor: 'pointer' }}>✕</button>
+              </div>
+              <div style={{ padding: 16 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 2px' }}>{editV.nombre_producto}</p>
+                <p style={{ fontSize: 10, color: G.muted, margin: '0 0 12px' }}>{editV.codigo_producto} • Costo: S/{editV.precio_costo}</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Cantidad</label><input type="number" value={ef.cantidad} onChange={e => setEf(s => ({ ...s, cantidad: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} /></div>
+                  <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Precio venta</label><input type="number" value={ef.precio_venta_real} onChange={e => setEf(s => ({ ...s, precio_venta_real: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} /></div>
+                </div>
+                <p style={{ fontSize: 10, color: G.warn, margin: '4px 0 10px' }}>⚠️ Cambiar la cantidad ajusta el stock del producto.</p>
+                <label style={{ fontSize: 11, color: G.muted }}>Cliente</label>
+                <select value={ef.cliente_id} onChange={e => setEf(s => ({ ...s, cliente_id: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 8, boxSizing: 'border-box' }}>
+                  <option value="">— Sin cliente —</option>
+                  {(clis || []).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Método pago</label>
+                    <select value={ef.metodo_pago} onChange={e => setEf(s => ({ ...s, metodo_pago: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}>
+                      <option value="">—</option><option value="Efectivo">Efectivo</option><option value="Yape">Yape</option><option value="Plin">Plin</option><option value="Transferencia">Transferencia</option></select></div>
+                  <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Entrega</label>
+                    <select value={ef.tipo_entrega} onChange={e => setEf(s => ({ ...s, tipo_entrega: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}>
+                      <option value="">—</option><option value="Tienda">Tienda</option><option value="Delivery">Delivery</option></select></div>
+                </div>
+                <label style={{ fontSize: 11, color: G.muted, display: 'block', marginTop: 8 }}>Nota</label>
+                <input value={ef.nota} onChange={e => setEf(s => ({ ...s, nota: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box', marginBottom: 10 }} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: G.text, cursor: 'pointer', background: G.goldLt, padding: 10, borderRadius: 8, marginBottom: 12 }}>
+                  <input type="checkbox" checked={ef.costo_devuelto} onChange={e => setEf(s => ({ ...s, costo_devuelto: e.target.checked }))} style={{ width: 18, height: 18 }} />
+                  Ya devolví el costo al proveedor
+                </label>
+                <button onClick={guardarEdit} disabled={guardandoV} style={{ width: '100%', padding: 13, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{guardandoV ? '⏳ Guardando...' : '💾 Guardar cambios'}</button>
+                <button onClick={() => setEditV(null)} style={{ width: '100%', padding: 10, marginTop: 8, borderRadius: 10, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

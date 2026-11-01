@@ -14,6 +14,7 @@ export default function VentaScreen(P) {
   const [showNew, setShowNew] = useState(false)
   const [newC, setNewC] = useState({ nombre: '', telefono: '', direccion: '', preferencias: '', acepta_publicidad: false })
   const [nota, setNota] = useState('')
+  const [costoDev, setCostoDev] = useState(false)
   const [saving, setSaving] = useState(false)
   const [cam, setCam] = useState(null)
   const [fotoYape, setFotoYape] = useState(null)
@@ -52,7 +53,7 @@ export default function VentaScreen(P) {
         codigo_producto: prod.codigo, nombre_producto: prod.nombre,
         precio_costo: prod.precio_costo, precio_venta_original: prod.precio_venta, precio_venta_real: parseFloat(precio),
         cantidad: cant, total, metodo_pago: metodo, tipo_entrega: entrega, foto_yape: foto_yape_url, nota,
-        estado: 'entregado'
+        estado: 'entregado', costo_devuelto: costoDev
       })
       // Descuento de stock: granel descuenta del origen, normal descuenta del producto
       if (prod.equivalente_granel && prod.origen_id) {
@@ -165,6 +166,10 @@ export default function VentaScreen(P) {
             </div>
           )}
         </Crd>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: G.text, cursor: 'pointer', background: '#fff', padding: 12, borderRadius: 10, border: '1px solid ' + G.border, marginBottom: 12 }}>
+          <input type="checkbox" checked={costoDev} onChange={e => setCostoDev(e.target.checked)} style={{ width: 20, height: 20 }} />
+          Ya devolví el costo al proveedor
+        </label>
         <button onClick={vender} disabled={saving || cant > prod.cantidad}
           style={{ width: '100%', padding: 16, borderRadius: 12, border: 'none', background: G.gold, color: '#fff', fontSize: 17, fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 15px rgba(197,165,90,0.4)', marginBottom: 20 }}>
           {saving ? 'Registrando...' : '✅ CONFIRMAR VENTA'}
