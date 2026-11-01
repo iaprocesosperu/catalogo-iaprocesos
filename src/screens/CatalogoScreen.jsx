@@ -6,12 +6,60 @@ import { LineSel } from '../components/index'
 import PhotoViewerModal from '../components/PhotoViewerModal'
 
 export default function CatalogoScreen(P) {
-  const { tit, lineas, linAct, setLinAct, prods, oris, setScr, setEditP, setVentaP, logout, notify, loadAll, emp, setRetorno } = P
+  const { tit, lineas, linAct, setLinAct, prods, oris, cats, eid, lid, setScr, setEditP, setVentaP, logout, notify, loadAll, emp, setRetorno } = P
   const [f, setF] = useState('')
   const [fOrigen, setFOrigen] = useState('')
   const [viewerProd, setViewerProd] = useState(null)
   const [ocultarAgotados, setOcultarAgotados] = useState(true)
   const [verOcultos, setVerOcultos] = useState(false)
+  const [verGenericos, setVerGenericos] = useState(false)
+  // Venta rápida
+  const [vrOpen, setVrOpen] = useState(false)
+  const [vrMas, setVrMas] = useState(false)
+  const [vrSaving, setVrSaving] = useState(false)
+  const [vr, setVr] = useState({ nombre: '', precio: '', cantidad: '1', costo: '', proveedor_id: '', origen_id: '', color: '', metodo: 'Efectivo', stock_extra: '' })
+  const [vrProv, setVrProv] = useState([])
+  useEffect(() => { if (vrOpen && !vrProv.length) { (async () => { const { data } = await supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre'); if (data) setVrProv(data) })() } }, [vrOpen])
+
+  const ventaRapida = async () => {
+    if (!vr.nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
+    const precio = parseFloat(vr.precio)
+    const cantVender = parseInt(vr.cantidad) || 1
+    if (isNaN(precio) || precio <= 0) { notify('Precio inválido', 'error'); return }
+    setVrSaving(true)
+    try {
+      // código automático
+      const { data: cods } = await supabase.from('productos').select('codigo').eq('empresa_id', eid)
+      const nums = (cods || []).map(p => parseInt(p.codigo)).filter(n => !isNaN(n))
+      const codigo = String(nums.length ? Math.max(...nums) + 1 : 1).padStart(3, '0')
+      const costo = vr.costo !== '' ? parseFloat(vr.costo) : 0
+      const stockCrear = vr.stock_extra !== '' ? (parseInt(vr.stock_extra) || 0) : cantVender // en modo mínimo = lo que se vende
+      // crear producto genérico
+      const { data: prod, error: e1 } = await supabase.from('productos').insert({
+        empresa_id: eid, linea_id: lid, codigo, nombre: vr.nombre.trim(),
+        precio_costo: costo, precio_venta: precio, cantidad: stockCrear,
+        color: vr.color || null, origen_id: vr.origen_id || null, es_generico: true, activo: true
+      }).select().single()
+      if (e1) throw e1
+      // proveedor: del origen elegido, o el elegido directo
+      let provId = vr.proveedor_id || null
+      if (!provId && vr.origen_id) { const { data: og } = await supabase.from('origenes').select('proveedor_id').eq('id', vr.origen_id).single(); provId = og?.proveedor_id || null }
+      // registrar venta
+      const { error: e2 } = await supabase.from('ventas').insert({
+        empresa_id: eid, producto_id: prod.id, codigo_producto: codigo, nombre_producto: vr.nombre.trim(),
+        precio_costo: costo, precio_venta_original: precio, precio_venta_real: precio,
+        cantidad: cantVender, total: precio * cantVender, metodo_pago: vr.metodo, tipo_entrega: 'Tienda',
+        estado: 'entregado', costo_devuelto: false, proveedor_id: provId, origen_id: vr.origen_id || null
+      })
+      if (e2) throw e2
+      // descontar stock vendido
+      await supabase.from('productos').update({ cantidad: stockCrear - cantVender }).eq('id', prod.id)
+      notify(`✅ Venta rápida: ${vr.nombre} (S/${(precio * cantVender).toFixed(2)})`)
+      setVrOpen(false); setVrMas(false); setVr({ nombre: '', precio: '', cantidad: '1', costo: '', proveedor_id: '', origen_id: '', color: '', metodo: 'Efectivo', stock_extra: '' })
+      await loadAll()
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setVrSaving(false)
+  }
   const [vista, setVista] = useState(() => { try { return localStorage.getItem('cat_vista') || 'grande' } catch { return 'grande' } })
   const ciclarVista = () => { const orden = ['grande', 'pequeno', 'lista']; const next = orden[(orden.indexOf(vista) + 1) % 3]; setVista(next); try { localStorage.setItem('cat_vista', next) } catch (e) {} }
   const vistaIcono = vista === 'grande' ? '▦' : vista === 'pequeno' ? '▪▪' : '☰'
@@ -21,7 +69,8 @@ export default function CatalogoScreen(P) {
     (!f || p.nombre?.toLowerCase().includes(f.toLowerCase()) || p.codigo?.toLowerCase().includes(f.toLowerCase())) &&
     (!fOrigen || p.origenes?.nombre === fOrigen) &&
     (!ocultarAgotados || p.cantidad > 0) &&
-    (verOcultos ? true : !p.oculto)
+    (verOcultos ? true : !p.oculto) &&
+    (verGenericos ? p.es_generico : true)
   )
 
   // ── Selección múltiple + ZIP fotos ──
@@ -246,6 +295,7 @@ export default function CatalogoScreen(P) {
             <h1 style={{ color: '#fff', fontSize: 18, fontWeight: 800, margin: 0 }}>📦 Catálogo</h1>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button onClick={() => { setVrOpen(true); setVrMas(false) }} style={{ background: '#fff', border: 'none', borderRadius: 8, padding: '6px 10px', color: G.gold, fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>⚡ Venta rápida</button>
             <button onClick={ciclarVista} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{vistaIcono} {vistaLabel}</button>
             <button onClick={() => { setModoNav(n => !n); setModoSel(false); limpiarSel() }} style={{ background: modoNav ? '#fff' : 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: modoNav ? G.gold : '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{modoNav ? '✕ Salir' : '👁️ Ver'}</button>
             <button onClick={() => { setModoSel(m => !m); setModoNav(false); limpiarSel() }} style={{ background: modoSel ? '#fff' : 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: modoSel ? G.gold : '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{modoSel ? '✕ Cancelar' : '☑️ Sel'}</button>
@@ -268,6 +318,7 @@ export default function CatalogoScreen(P) {
           )}
           <button onClick={() => setOcultarAgotados(v => !v)} style={{ padding: '8px 10px', borderRadius: 10, border: 'none', background: ocultarAgotados ? '#fff' : 'rgba(255,255,255,0.2)', color: ocultarAgotados ? G.gold : '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{ocultarAgotados ? '✓ Sin agotados' : 'Ver agotados'}</button>
           <button onClick={() => setVerOcultos(v => !v)} style={{ padding: '8px 10px', borderRadius: 10, border: 'none', background: verOcultos ? '#374151' : 'rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{verOcultos ? '👁️‍🗨️ Viendo ocultos' : 'Ver ocultos'}</button>
+          <button onClick={() => setVerGenericos(v => !v)} style={{ padding: '8px 10px', borderRadius: 10, border: 'none', background: verGenericos ? '#fff' : 'rgba(255,255,255,0.2)', color: verGenericos ? G.gold : '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{verGenericos ? '⚡ Solo genéricos' : 'Genéricos'}</button>
         </div>
       </div>
       <div style={{ background: '#fff' }}>
@@ -384,6 +435,56 @@ export default function CatalogoScreen(P) {
                 <button onClick={() => setNavIdx(i => Math.min(fl.length - 1, i + 1))} disabled={navIdx >= fl.length - 1} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.border, background: navIdx >= fl.length - 1 ? '#f5f5f5' : '#fff', color: navIdx >= fl.length - 1 ? '#bbb' : G.text, fontSize: 13, fontWeight: 700, cursor: navIdx >= fl.length - 1 ? 'default' : 'pointer' }}>Siguiente ›</button>
               </div>
               <button onClick={editarDesdeNav} style={{ width: '100%', padding: 13, marginTop: 8, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>✏️ Editar en catálogo</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: venta rápida */}
+      {vrOpen && (
+        <div onClick={() => setVrOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 160, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 400, maxHeight: '92vh', overflow: 'auto' }}>
+            <div style={{ background: G.gold, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
+              <p style={{ color: '#fff', fontSize: 15, fontWeight: 800, margin: 0 }}>⚡ Venta rápida</p>
+              <button onClick={() => setVrOpen(false)} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 8, width: 30, height: 30, color: '#fff', fontSize: 16, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ padding: 16 }}>
+              <label style={{ fontSize: 11, color: G.muted }}>Nombre *</label>
+              <input value={vr.nombre} onChange={e => setVr(s => ({ ...s, nombre: e.target.value }))} placeholder="Ej: Blusa suelta" autoFocus style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 14, boxSizing: 'border-box', marginBottom: 8 }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Precio *</label><input type="number" value={vr.precio} onChange={e => setVr(s => ({ ...s, precio: e.target.value }))} placeholder="S/" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 14, boxSizing: 'border-box' }} /></div>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Cantidad</label><input type="number" value={vr.cantidad} onChange={e => setVr(s => ({ ...s, cantidad: e.target.value }))} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 14, boxSizing: 'border-box' }} /></div>
+              </div>
+
+              <button onClick={() => setVrMas(m => !m)} style={{ marginTop: 10, background: 'none', border: 'none', color: G.gold, fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0 }}>{vrMas ? '− Menos datos' : '+ Más datos (opcional)'}</button>
+
+              {vrMas && (
+                <div style={{ marginTop: 8, borderTop: '1px solid ' + G.border, paddingTop: 10 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Costo</label><input type="number" value={vr.costo} onChange={e => setVr(s => ({ ...s, costo: e.target.value }))} placeholder="S/" style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} /></div>
+                    <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Stock a crear</label><input type="number" value={vr.stock_extra} onChange={e => setVr(s => ({ ...s, stock_extra: e.target.value }))} placeholder="= cant" style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} /></div>
+                  </div>
+                  <label style={{ fontSize: 11, color: G.muted, display: 'block', marginTop: 8 }}>Color</label>
+                  <input value={vr.color} onChange={e => setVr(s => ({ ...s, color: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box', marginBottom: 8 }} />
+                  <label style={{ fontSize: 11, color: G.muted }}>Origen</label>
+                  <select value={vr.origen_id} onChange={e => setVr(s => ({ ...s, origen_id: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 8, boxSizing: 'border-box' }}>
+                    <option value="">— Sin origen —</option>
+                    {(oris || []).map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+                  </select>
+                  <label style={{ fontSize: 11, color: G.muted }}>Proveedor</label>
+                  <select value={vr.proveedor_id} onChange={e => setVr(s => ({ ...s, proveedor_id: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}>
+                    <option value="">— Del origen / ninguno —</option>
+                    {vrProv.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <label style={{ fontSize: 11, color: G.muted, display: 'block', marginTop: 10 }}>Método de pago</label>
+              <select value={vr.metodo} onChange={e => setVr(s => ({ ...s, metodo: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 12, boxSizing: 'border-box' }}>
+                <option value="Efectivo">Efectivo</option><option value="Yape">Yape</option><option value="Plin">Plin</option><option value="Transferencia">Transferencia</option>
+              </select>
+
+              <button onClick={ventaRapida} disabled={vrSaving} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>{vrSaving ? '⏳...' : '✅ Vender'}</button>
             </div>
           </div>
         </div>
