@@ -19,7 +19,21 @@ export default function CatalogoScreen(P) {
   const [vrSaving, setVrSaving] = useState(false)
   const [vr, setVr] = useState({ nombre: '', precio: '', cantidad: '1', costo: '', proveedor_id: '', origen_id: '', color: '', metodo: 'Efectivo', stock_extra: '' })
   const [vrProv, setVrProv] = useState([])
+  const [vrFoto, setVrFoto] = useState(null) // {blob, preview}
+  const vrFileRef = useRef(null)
   useEffect(() => { if (vrOpen && !vrProv.length) { (async () => { const { data } = await supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre'); if (data) setVrProv(data) })() } }, [vrOpen])
+
+  const setFotoVr = (file) => { if (!file) return; setVrFoto({ blob: file, preview: URL.createObjectURL(file) }) }
+  useEffect(() => {
+    if (!vrOpen || !vrMas) return
+    const onPaste = (e) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const it of items) { if (it.type.startsWith('image/')) { const f = it.getAsFile(); if (f) { setFotoVr(f); notify('📋 Foto pegada') } break } }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [vrOpen, vrMas])
 
   const ventaRapida = async () => {
     if (!vr.nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
@@ -34,13 +48,17 @@ export default function CatalogoScreen(P) {
       const codigo = String(nums.length ? Math.max(...nums) + 1 : 1).padStart(3, '0')
       const costo = vr.costo !== '' ? parseFloat(vr.costo) : 0
       const stockCrear = vr.stock_extra !== '' ? (parseInt(vr.stock_extra) || 0) : cantVender // en modo mínimo = lo que se vende
+      // foto opcional
+      let foto_url = null
+      if (vrFoto?.blob) { const comp = await comprimirImagen(new File([vrFoto.blob], 'vr.jpg', { type: vrFoto.blob.type || 'image/jpeg' })); foto_url = await subirFoto(comp, codigo + '_' + Date.now()) }
       // crear producto genérico
       const { data: prod, error: e1 } = await supabase.from('productos').insert({
         empresa_id: eid, linea_id: lid, codigo, nombre: vr.nombre.trim(),
         precio_costo: costo, precio_venta: precio, cantidad: stockCrear,
-        color: vr.color || null, origen_id: vr.origen_id || null, es_generico: true, activo: true
+        color: vr.color || null, origen_id: vr.origen_id || null, es_generico: true, activo: true, foto_url
       }).select().single()
       if (e1) throw e1
+      if (foto_url) { await supabase.from('fotos_producto').insert({ producto_id: prod.id, url: foto_url, es_principal: true, orden: 0 }) }
       // proveedor: del origen elegido, o el elegido directo
       let provId = vr.proveedor_id || null
       if (!provId && vr.origen_id) { const { data: og } = await supabase.from('origenes').select('proveedor_id').eq('id', vr.origen_id).single(); provId = og?.proveedor_id || null }
@@ -55,7 +73,7 @@ export default function CatalogoScreen(P) {
       // descontar stock vendido
       await supabase.from('productos').update({ cantidad: stockCrear - cantVender }).eq('id', prod.id)
       notify(`✅ Venta rápida: ${vr.nombre} (S/${(precio * cantVender).toFixed(2)})`)
-      setVrOpen(false); setVrMas(false); setVr({ nombre: '', precio: '', cantidad: '1', costo: '', proveedor_id: '', origen_id: '', color: '', metodo: 'Efectivo', stock_extra: '' })
+      setVrOpen(false); setVrMas(false); setVrFoto(null); setVr({ nombre: '', precio: '', cantidad: '1', costo: '', proveedor_id: '', origen_id: '', color: '', metodo: 'Efectivo', stock_extra: '' })
       await loadAll()
     } catch (e) { notify('Error: ' + e.message, 'error') }
     setVrSaving(false)
@@ -460,6 +478,17 @@ export default function CatalogoScreen(P) {
 
               {vrMas && (
                 <div style={{ marginTop: 8, borderTop: '1px solid ' + G.border, paddingTop: 10 }}>
+                  <label style={{ fontSize: 11, color: G.muted, display: 'block', marginBottom: 4 }}>Foto (pega del portapapeles o carga)</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                    {vrFoto
+                      ? <img src={vrFoto.preview} alt="" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, border: '1px solid ' + G.border }} />
+                      : <div style={{ width: 60, height: 60, borderRadius: 8, background: G.goldLt, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, opacity: 0.4 }}>📷</div>}
+                    <div style={{ flex: 1, display: 'flex', gap: 6 }}>
+                      <button onClick={() => vrFileRef.current?.click()} style={{ flex: 1, padding: 9, borderRadius: 8, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📁 Cargar</button>
+                      {vrFoto && <button onClick={() => setVrFoto(null)} style={{ padding: 9, borderRadius: 8, border: '1px solid ' + G.border, background: '#fff', color: G.err, fontSize: 12, cursor: 'pointer' }}>✕</button>}
+                    </div>
+                  </div>
+                  <input ref={vrFileRef} type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) setFotoVr(f); e.target.value = '' }} style={{ display: 'none' }} />
                   <div style={{ display: 'flex', gap: 8 }}>
                     <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Costo</label><input type="number" value={vr.costo} onChange={e => setVr(s => ({ ...s, costo: e.target.value }))} placeholder="S/" style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} /></div>
                     <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Stock a crear</label><input type="number" value={vr.stock_extra} onChange={e => setVr(s => ({ ...s, stock_extra: e.target.value }))} placeholder="= cant" style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} /></div>
@@ -467,7 +496,7 @@ export default function CatalogoScreen(P) {
                   <label style={{ fontSize: 11, color: G.muted, display: 'block', marginTop: 8 }}>Color</label>
                   <input value={vr.color} onChange={e => setVr(s => ({ ...s, color: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box', marginBottom: 8 }} />
                   <label style={{ fontSize: 11, color: G.muted }}>Origen</label>
-                  <select value={vr.origen_id} onChange={e => setVr(s => ({ ...s, origen_id: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 8, boxSizing: 'border-box' }}>
+                  <select value={vr.origen_id} onChange={e => { const oid = e.target.value; const og = (oris || []).find(o => String(o.id) === String(oid)); setVr(s => ({ ...s, origen_id: oid, proveedor_id: og?.proveedor_id ? String(og.proveedor_id) : s.proveedor_id })) }} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 8, boxSizing: 'border-box' }}>
                     <option value="">— Sin origen —</option>
                     {(oris || []).map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
                   </select>
