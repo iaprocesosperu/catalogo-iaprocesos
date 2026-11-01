@@ -130,7 +130,8 @@ export default function CatalogoScreen(P) {
   const [vr, setVr] = useState({ nombre: '', precio: '', cantidad: '1', costo: '', proveedor_id: '', origen_id: '', color: '', metodo: 'Efectivo', stock_extra: '' })
   const [vrProv, setVrProv] = useState([])
   const [vrFoto, setVrFoto] = useState(null) // {blob, preview}
-  const vrFileRef = useRef(null)
+  const vrGalRef = useRef(null)
+  const vrCamRef = useRef(null)
   useEffect(() => { if (vrOpen && !vrProv.length) { (async () => { const { data } = await supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre'); if (data) setVrProv(data) })() } }, [vrOpen])
 
   const ventaRapidaAlCarrito = async () => {
@@ -696,11 +697,13 @@ export default function CatalogoScreen(P) {
                       ? <img src={vrFoto.preview} alt="" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, border: '1px solid ' + G.border }} />
                       : <div style={{ width: 60, height: 60, borderRadius: 8, background: G.goldLt, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, opacity: 0.4 }}>📷</div>}
                     <div style={{ flex: 1, display: 'flex', gap: 6 }}>
-                      <button onClick={() => vrFileRef.current?.click()} style={{ flex: 1, padding: 9, borderRadius: 8, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📁 Cargar</button>
+                      <button onClick={() => vrGalRef.current?.click()} style={{ flex: 1, padding: 9, borderRadius: 8, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>🖼️ Galería</button>
+                      <button onClick={() => vrCamRef.current?.click()} style={{ flex: 1, padding: 9, borderRadius: 8, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>📷 Cámara</button>
                       {vrFoto && <button onClick={() => setVrFoto(null)} style={{ padding: 9, borderRadius: 8, border: '1px solid ' + G.border, background: '#fff', color: G.err, fontSize: 12, cursor: 'pointer' }}>✕</button>}
                     </div>
                   </div>
-                  <input ref={vrFileRef} type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) setFotoVr(f); e.target.value = '' }} style={{ display: 'none' }} />
+                  <input ref={vrGalRef} type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) setFotoVr(f); e.target.value = '' }} style={{ display: 'none' }} />
+                  <input ref={vrCamRef} type="file" accept="image/*" capture="environment" onChange={e => { const f = e.target.files?.[0]; if (f) setFotoVr(f); e.target.value = '' }} style={{ display: 'none' }} />
                   <div style={{ display: 'flex', gap: 8 }}>
                     <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Costo</label><input type="number" value={vr.costo} onChange={e => setVr(s => ({ ...s, costo: e.target.value }))} placeholder="S/" style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} /></div>
                     <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Stock a crear</label><input type="number" value={vr.stock_extra} onChange={e => setVr(s => ({ ...s, stock_extra: e.target.value }))} placeholder="= cant" style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} /></div>
@@ -725,10 +728,7 @@ export default function CatalogoScreen(P) {
                 <option value="Efectivo">Efectivo</option><option value="Yape">Yape</option><option value="Plin">Plin</option><option value="Transferencia">Transferencia</option>
               </select>
 
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => ventaRapidaAlCarrito()} disabled={vrSaving} style={{ flex: 1, padding: 14, borderRadius: 10, border: '1px solid #059669', background: '#fff', color: '#059669', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>🛒 Al carrito</button>
-                <button onClick={ventaRapida} disabled={vrSaving} style={{ flex: 1, padding: 14, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>{vrSaving ? '⏳...' : '✅ Vender'}</button>
-              </div>
+              <button onClick={() => ventaRapidaAlCarrito()} disabled={vrSaving} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: '#059669', color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>{vrSaving ? '⏳...' : '🛒 Agregar al carrito'}</button>
             </div>
           </div>
         </div>
