@@ -48,12 +48,14 @@ export default function VentaScreen(P) {
     try {
       let foto_yape_url = null
       if (fotoYape) { const blob = await comprimirImagen(fotoYape, 600); foto_yape_url = await subirFoto(blob, 'yape_' + Date.now()) }
+      let provId = null
+      if (prod.origen_id) { const { data: og } = await supabase.from('origenes').select('proveedor_id').eq('id', prod.origen_id).single(); provId = og?.proveedor_id || null }
       await supabase.from('ventas').insert({
         empresa_id: eid, producto_id: prod.id, cliente_id: cliId || null,
         codigo_producto: prod.codigo, nombre_producto: prod.nombre,
         precio_costo: prod.precio_costo, precio_venta_original: prod.precio_venta, precio_venta_real: parseFloat(precio),
         cantidad: cant, total, metodo_pago: metodo, tipo_entrega: entrega, foto_yape: foto_yape_url, nota,
-        estado: 'entregado', costo_devuelto: costoDev
+        estado: 'entregado', costo_devuelto: costoDev, proveedor_id: provId, origen_id: prod.origen_id || null
       })
       // Descuento de stock: granel descuenta del origen, normal descuenta del producto
       if (prod.equivalente_granel && prod.origen_id) {

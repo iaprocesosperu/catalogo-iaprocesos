@@ -326,6 +326,12 @@ export function OrigenesScr(P) {
   const [detalleOrigen, setDetalleOrigen] = useState(null)
   const [usados, setUsados] = useState({})
   const [proveedores, setProveedores] = useState([])
+  const [provAnterior, setProvAnterior] = useState(null) // proveedor antes de editar
+  const [afectadas, setAfectadas] = useState(null) // { origenId, nuevoProv, nuevoProvNombre, ventas: [] }
+  const [afSel, setAfSel] = useState([]) // ventas seleccionadas para actualizar
+  const [afDesde, setAfDesde] = useState('')
+  const [afHasta, setAfHasta] = useState('')
+  const [afTrabajando, setAfTrabajando] = useState(false)
   const formRef = useRef(null)
   const s = (k, v) => setF(p => ({ ...p, [k]: v }))
   const invCalc = parseFloat(f.cantidad || 0) * parseFloat(f.precio_costo_defecto || 0)
@@ -357,14 +363,53 @@ export function OrigenesScr(P) {
   const guardar = async () => {
     if (!f.nombre.trim()) { notify('Nombre obligatorio', 'error'); return }
     const data = { empresa_id: eid, linea_id: lid, nombre: f.nombre.trim(), cantidad: parseInt(f.cantidad) || 0, precio_costo_defecto: f.precio_costo_defecto !== '' ? parseFloat(f.precio_costo_defecto) : null, precio_venta_defecto: f.precio_venta_defecto !== '' ? parseFloat(f.precio_venta_defecto) : null, fecha: f.fecha || null, observaciones: f.observaciones || null, es_granel: f.es_granel, unidad_base: f.es_granel ? (f.unidad_base || 'kg') : null, stock_granel: f.es_granel ? (parseFloat(f.cantidad) || 0) : null, proveedor_id: f.proveedor_id !== '' ? parseInt(f.proveedor_id) : null }
-    if (editId) { await supabase.from('origenes').update(data).eq('id', editId); notify('Actualizado') }
+    const nuevoProv = f.proveedor_id !== '' ? parseInt(f.proveedor_id) : null
+    const idEditado = editId
+    const cambioProv = editId && (provAnterior ?? null) !== (nuevoProv ?? null)
+    if (editId) { const upd = { ...data }; if (f.linea_id) upd.linea_id = f.linea_id; await supabase.from('origenes').update(upd).eq('id', editId); notify('Actualizado') }
     else { await supabase.from('origenes').insert({ ...data, estado: 'activo' }); notify('Agregado') }
     setShowAdd(false); setEditId(null); setF({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg', proveedor_id: '' }); await loadAll()
+
+    if (cambioProv) {
+      const { data: vtas } = await supabase.from('ventas')
+        .select('id,nombre_producto,codigo_producto,cantidad,total,created_at,proveedor_id')
+        .eq('empresa_id', eid).eq('origen_id', idEditado)
+        .order('created_at', { ascending: false })
+      if (vtas && vtas.length) {
+        const nombreProv = nuevoProv ? (proveedores.find(p => p.id === nuevoProv)?.nombre || '') : 'Sin proveedor'
+        setAfectadas({ origenId: idEditado, nuevoProv, nuevoProvNombre: nombreProv, ventas: vtas })
+        setAfSel(vtas.map(v => v.id)); setAfDesde(''); setAfHasta('')
+        return
+      }
+    }
+    if (retorno === 'reporteOrigenes') { if (setRetorno) setRetorno(null); setScr('reporteOrigenes') }
+  }
+
+  const afVisibles = afectadas ? afectadas.ventas.filter(v => {
+    if (afDesde && new Date(v.created_at) < new Date(afDesde)) return false
+    if (afHasta && new Date(v.created_at) > new Date(afHasta + 'T23:59:59')) return false
+    return true
+  }) : []
+  const toggleAf = (id) => setAfSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
+
+  const aplicarAfectadas = async () => {
+    if (!afSel.length) { notify('No seleccionaste ninguna venta', 'error'); return }
+    setAfTrabajando(true)
+    try {
+      await supabase.from('ventas').update({ proveedor_id: afectadas.nuevoProv }).in('id', afSel)
+      notify(`✅ ${afSel.length} ventas actualizadas a ${afectadas.nuevoProvNombre}`)
+      setAfectadas(null); setAfSel([]); await loadAll()
+      if (retorno === 'reporteOrigenes') { if (setRetorno) setRetorno(null); setScr('reporteOrigenes') }
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setAfTrabajando(false)
+  }
+  const cerrarAfectadas = () => {
+    setAfectadas(null); setAfSel([])
     if (retorno === 'reporteOrigenes') { if (setRetorno) setRetorno(null); setScr('reporteOrigenes') }
   }
 
   const editar = o => {
-    setEditId(o.id); setF({ nombre: o.nombre || '', cantidad: String(o.cantidad || ''), precio_costo_defecto: o.precio_costo_defecto != null ? String(o.precio_costo_defecto) : '', precio_venta_defecto: o.precio_venta_defecto != null ? String(o.precio_venta_defecto) : '', fecha: o.fecha || '', observaciones: o.observaciones || '', es_granel: o.es_granel || false, unidad_base: o.unidad_base || 'kg', proveedor_id: o.proveedor_id != null ? String(o.proveedor_id) : '' })
+    setEditId(o.id); setProvAnterior(o.proveedor_id ?? null); setF({ nombre: o.nombre || '', cantidad: String(o.cantidad || ''), precio_costo_defecto: o.precio_costo_defecto != null ? String(o.precio_costo_defecto) : '', precio_venta_defecto: o.precio_venta_defecto != null ? String(o.precio_venta_defecto) : '', fecha: o.fecha || '', observaciones: o.observaciones || '', es_granel: o.es_granel || false, unidad_base: o.unidad_base || 'kg', proveedor_id: o.proveedor_id != null ? String(o.proveedor_id) : '', linea_id: o.linea_id || null })
     setShowAdd(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
@@ -481,6 +526,47 @@ export function OrigenesScr(P) {
             </div>
           )
         })}
+
+        {/* Modal: ventas históricas afectadas por cambio de proveedor */}
+        {afectadas && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+            <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 440, maxHeight: '92vh', overflow: 'auto' }}>
+              <div style={{ background: G.gold, padding: '12px 16px', position: 'sticky', top: 0 }}>
+                <p style={{ color: '#fff', fontSize: 15, fontWeight: 800, margin: 0 }}>⚠️ Ventas históricas afectadas</p>
+                <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: 11, margin: '2px 0 0' }}>Cambiaste el proveedor a <b>{afectadas.nuevoProvNombre}</b>. ¿Actualizar también estas ventas pasadas?</p>
+              </div>
+              <div style={{ padding: 16 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: G.muted }}>Rango:</span>
+                  <input type="date" value={afDesde} onChange={e => setAfDesde(e.target.value)} style={{ flex: 1, minWidth: 110, padding: '6px 8px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12 }} />
+                  <span style={{ fontSize: 11, color: G.muted }}>a</span>
+                  <input type="date" value={afHasta} onChange={e => setAfHasta(e.target.value)} style={{ flex: 1, minWidth: 110, padding: '6px 8px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12 }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: G.muted }}>{afVisibles.length} ventas • {afSel.length} seleccionadas</span>
+                  <span style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setAfSel(afVisibles.map(v => v.id))} style={{ background: 'none', border: 'none', color: G.gold, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Todas</button>
+                    <button onClick={() => setAfSel([])} style={{ background: 'none', border: 'none', color: G.err, fontSize: 12, cursor: 'pointer' }}>Ninguna</button>
+                  </span>
+                </div>
+                <div style={{ maxHeight: 320, overflow: 'auto', marginBottom: 12 }}>
+                  {afVisibles.map(v => (
+                    <div key={v.id} onClick={() => toggleAf(v.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, borderRadius: 8, marginBottom: 4, border: '1px solid ' + (afSel.includes(v.id) ? G.gold : G.border), background: afSel.includes(v.id) ? G.goldLt : '#fff', cursor: 'pointer' }}>
+                      <div style={{ width: 22, height: 22, borderRadius: 11, flexShrink: 0, background: afSel.includes(v.id) ? G.gold : '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 800 }}>{afSel.includes(v.id) ? '✓' : ''}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 12, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.nombre_producto}</p>
+                        <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{v.codigo_producto} • {v.cantidad} und • {new Date(v.created_at).toLocaleDateString('es-PE')}</p>
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: G.gold, flexShrink: 0 }}>S/{v.total.toFixed(0)}</span>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={aplicarAfectadas} disabled={afTrabajando} style={{ width: '100%', padding: 13, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{afTrabajando ? '⏳ Actualizando...' : `Actualizar ${afSel.length} ventas a ${afectadas.nuevoProvNombre}`}</button>
+                <button onClick={cerrarAfectadas} style={{ width: '100%', padding: 10, marginTop: 8, borderRadius: 10, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>No actualizar (dejar como estaban)</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -778,7 +864,10 @@ export function HistorialScr(P) {
   const [eliminando, setEliminando] = useState(false)
   const [buscar, setBuscar] = useState('')
   const [filCliente, setFilCliente] = useState('')
+  const [filProveedor, setFilProveedor] = useState('')
   const [filPendiente, setFilPendiente] = useState(false)
+  const [provList, setProvList] = useState([])
+  useEffect(() => { (async () => { const { data } = await supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre'); if (data) setProvList(data) })() }, [eid])
   const [editV, setEditV] = useState(null) // venta en edición
   const [ef, setEf] = useState({ cantidad: '', precio_venta_real: '', cliente_id: '', metodo_pago: '', tipo_entrega: '', nota: '', costo_devuelto: false })
   const [guardandoV, setGuardandoV] = useState(false)
@@ -862,6 +951,7 @@ export function HistorialScr(P) {
     if (desde && new Date(v.created_at) < new Date(desde)) return false
     if (hasta && new Date(v.created_at) > new Date(hasta + 'T23:59:59')) return false
     if (filCliente && String(v.cliente_id) !== String(filCliente)) return false
+    if (filProveedor && String(v.proveedor_id) !== String(filProveedor)) return false
     if (filPendiente && v.costo_devuelto) return false
     if (buscar) {
       const t = buscar.toLowerCase()
@@ -886,6 +976,7 @@ export function HistorialScr(P) {
       { k: 'total', l: 'Total' }, { k: r => ((r.precio_venta_real - r.precio_costo) * r.cantidad).toFixed(2), l: 'Ganancia' },
       { k: 'metodo_pago', l: 'Pago' }, { k: 'tipo_entrega', l: 'Entrega' },
       { k: r => r.clientes?.nombre || '', l: 'Cliente' },
+      { k: r => r.proveedores?.nombre || '', l: 'Proveedor' },
       { k: r => r.costo_devuelto ? 'SI' : 'NO', l: 'Costo devuelto' }
     ]); notify('Exportado')
   }
@@ -934,9 +1025,13 @@ export function HistorialScr(P) {
         {/* Búsqueda + filtro cliente + pendientes */}
         <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="🔍 Buscar por producto, código o cliente..." style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box', marginBottom: 8 }} />
         <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-          <select value={filCliente} onChange={e => setFilCliente(e.target.value)} style={{ flex: 1, minWidth: 160, padding: '8px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12, background: '#fff', color: G.text }}>
+          <select value={filCliente} onChange={e => setFilCliente(e.target.value)} style={{ flex: 1, minWidth: 150, padding: '8px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12, background: '#fff', color: G.text }}>
             <option value="">👥 Todos los clientes</option>
             {(clis || []).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+          <select value={filProveedor} onChange={e => setFilProveedor(e.target.value)} style={{ flex: 1, minWidth: 150, padding: '8px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 12, background: '#fff', color: G.text }}>
+            <option value="">🏷️ Todos los proveedores</option>
+            {provList.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
           </select>
           <button onClick={() => setFilPendiente(v => !v)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + (filPendiente ? G.err : G.border), background: filPendiente ? G.err : '#fff', color: filPendiente ? '#fff' : G.text, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{filPendiente ? '✓ ' : ''}⏳ Falta devolver</button>
         </div>
@@ -952,7 +1047,7 @@ export function HistorialScr(P) {
               <button onClick={exp} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>📥 Excel</button>
             </div>
             {fl.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: G.muted }}><p style={{ fontSize: 32 }}>📋</p><p>No hay ventas</p></div>
-              : fl.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p></div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<div style={{ marginTop: 4, display: 'flex', gap: 3, justifyContent: 'flex-end' }}><button onClick={() => toggleDevuelto(v)} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: v.costo_devuelto ? '#D1FAE5' : '#FEF3C7', color: v.costo_devuelto ? '#065F46' : '#92400E', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{v.costo_devuelto ? '✓ Devuelto' : '⏳ Falta'}</button><button onClick={() => abrirEdit(v)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>✏️</button><button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑</button></div></div></div></div>))}
+              : fl.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p>{(v.proveedores?.nombre || v.origenes?.nombre) && <p style={{ fontSize: 10, color: G.goldDk, margin: '2px 0 0', fontWeight: 700 }}>{v.proveedores?.nombre ? '🏷️ ' + v.proveedores.nombre : ''}{v.origenes?.nombre ? (v.proveedores?.nombre ? ' • ' : '') + '📋 ' + v.origenes.nombre : ''}</p>}</div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<div style={{ marginTop: 4, display: 'flex', gap: 3, justifyContent: 'flex-end' }}><button onClick={() => toggleDevuelto(v)} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: v.costo_devuelto ? '#D1FAE5' : '#FEF3C7', color: v.costo_devuelto ? '#065F46' : '#92400E', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{v.costo_devuelto ? '✓ Devuelto' : '⏳ Falta'}</button><button onClick={() => abrirEdit(v)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>✏️</button><button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑</button></div></div></div></div>))}
           </>
         )}
         {tab === 'analisis' && (
