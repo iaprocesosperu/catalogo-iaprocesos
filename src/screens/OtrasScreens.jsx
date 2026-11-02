@@ -869,12 +869,13 @@ export function HistorialScr(P) {
   const [provList, setProvList] = useState([])
   useEffect(() => { (async () => { const { data } = await supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre'); if (data) setProvList(data) })() }, [eid])
   const [editV, setEditV] = useState(null) // venta en edición
-  const [ef, setEf] = useState({ cantidad: '', precio_venta_real: '', precio_costo: '', cliente_id: '', metodo_pago: '', tipo_entrega: '', nota: '', costo_devuelto: false })
+  const [ef, setEf] = useState({ cantidad: '', precio_venta_real: '', precio_costo: '', cliente_id: '', metodo_pago: '', tipo_entrega: '', nota: '', costo_devuelto: false, fecha: '' })
+  const [filPorPagar, setFilPorPagar] = useState(false)
   const [guardandoV, setGuardandoV] = useState(false)
 
   const abrirEdit = (v) => {
     setEditV(v)
-    setEf({ cantidad: String(v.cantidad), precio_venta_real: String(v.precio_venta_real), precio_costo: v.precio_costo != null ? String(v.precio_costo) : '', cliente_id: v.cliente_id || '', metodo_pago: v.metodo_pago || '', tipo_entrega: v.tipo_entrega || '', nota: v.nota || '', costo_devuelto: !!v.costo_devuelto })
+    setEf({ cantidad: String(v.cantidad), precio_venta_real: String(v.precio_venta_real), precio_costo: v.precio_costo != null ? String(v.precio_costo) : '', cliente_id: v.cliente_id || '', metodo_pago: v.metodo_pago || '', tipo_entrega: v.tipo_entrega || '', nota: v.nota || '', costo_devuelto: !!v.costo_devuelto, fecha: v.created_at ? v.created_at.slice(0, 10) : '' })
   }
 
   const guardarEdit = async () => {
@@ -907,7 +908,8 @@ export function HistorialScr(P) {
         metodo_pago: ef.metodo_pago || null,
         tipo_entrega: ef.tipo_entrega || null,
         nota: ef.nota || null,
-        costo_devuelto: ef.costo_devuelto
+        costo_devuelto: ef.costo_devuelto,
+        ...(ef.fecha ? { created_at: new Date(ef.fecha + 'T12:00:00').toISOString() } : {})
       }).eq('id', editV.id)
       notify('✅ Venta actualizada')
       setEditV(null); await loadAll()
@@ -954,6 +956,7 @@ export function HistorialScr(P) {
     if (filCliente && String(v.cliente_id) !== String(filCliente)) return false
     if (filProveedor && String(v.proveedor_id) !== String(filProveedor)) return false
     if (filPendiente && v.costo_devuelto) return false
+    if (filPorPagar && v.metodo_pago !== 'Por Pagar') return false
     if (buscar) {
       const t = buscar.toLowerCase()
       const enProd = (v.nombre_producto || '').toLowerCase().includes(t) || (v.codigo_producto || '').toLowerCase().includes(t)
@@ -966,6 +969,11 @@ export function HistorialScr(P) {
   const tV = fl.reduce((s, v) => s + v.total, 0)
   const tG = fl.reduce((s, v) => s + (v.precio_venta_real - v.precio_costo) * v.cantidad, 0)
   const tPend = fl.filter(v => !v.costo_devuelto).reduce((s, v) => s + (v.precio_costo || 0) * v.cantidad, 0)
+  const tPorCobrar = fl.filter(v => v.metodo_pago === 'Por Pagar').reduce((s, v) => s + v.total, 0)
+  const marcarPagado = async (v, metodo) => {
+    await supabase.from('ventas').update({ metodo_pago: metodo }).eq('id', v.id)
+    await loadAll()
+  }
 
   const exp = () => {
     exportCSV(fl, 'ventas_' + new Date().toISOString().split('T')[0], [
@@ -1035,10 +1043,16 @@ export function HistorialScr(P) {
             {provList.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
           </select>
           <button onClick={() => setFilPendiente(v => !v)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + (filPendiente ? G.err : G.border), background: filPendiente ? G.err : '#fff', color: filPendiente ? '#fff' : G.text, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{filPendiente ? '✓ ' : ''}⏳ Falta devolver</button>
+          <button onClick={() => setFilPorPagar(v => !v)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + (filPorPagar ? '#D97706' : G.border), background: filPorPagar ? '#D97706' : '#fff', color: filPorPagar ? '#fff' : G.text, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{filPorPagar ? '✓ ' : ''}💳 Por cobrar</button>
         </div>
         {tPend > 0 && (
-          <div style={{ background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#92400E', fontWeight: 700 }}>
+          <div style={{ background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 8, padding: '8px 12px', marginBottom: 8, fontSize: 12, color: '#92400E', fontWeight: 700 }}>
             💰 Costo pendiente de devolver a proveedores: S/{tPend.toFixed(2)}
+          </div>
+        )}
+        {tPorCobrar > 0 && (
+          <div style={{ background: '#FFEDD5', border: '1px solid #D97706', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#9A3412', fontWeight: 700 }}>
+            💳 Te deben (fiado / por pagar): S/{tPorCobrar.toFixed(2)}
           </div>
         )}
         {tab === 'lista' && (
@@ -1048,7 +1062,7 @@ export function HistorialScr(P) {
               <button onClick={exp} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>📥 Excel</button>
             </div>
             {fl.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: G.muted }}><p style={{ fontSize: 32 }}>📋</p><p>No hay ventas</p></div>
-              : fl.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p>{(v.proveedores?.nombre || v.origenes?.nombre) && <p style={{ fontSize: 10, color: G.goldDk, margin: '2px 0 0', fontWeight: 700 }}>{v.proveedores?.nombre ? '🏷️ ' + v.proveedores.nombre : ''}{v.origenes?.nombre ? (v.proveedores?.nombre ? ' • ' : '') + '📋 ' + v.origenes.nombre : ''}</p>}</div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<div style={{ marginTop: 4, display: 'flex', gap: 3, justifyContent: 'flex-end' }}><button onClick={() => toggleDevuelto(v)} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: v.costo_devuelto ? '#D1FAE5' : '#FEF3C7', color: v.costo_devuelto ? '#065F46' : '#92400E', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{v.costo_devuelto ? '✓ Devuelto' : '⏳ Falta'}</button><button onClick={() => abrirEdit(v)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>✏️</button><button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑</button></div></div></div></div>))}
+              : fl.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p>{(v.proveedores?.nombre || v.origenes?.nombre) && <p style={{ fontSize: 10, color: G.goldDk, margin: '2px 0 0', fontWeight: 700 }}>{v.proveedores?.nombre ? '🏷️ ' + v.proveedores.nombre : ''}{v.origenes?.nombre ? (v.proveedores?.nombre ? ' • ' : '') + '📋 ' + v.origenes.nombre : ''}</p>}</div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<div style={{ marginTop: 4, display: 'flex', gap: 3, justifyContent: 'flex-end', flexWrap: 'wrap' }}>{v.metodo_pago === 'Por Pagar' && <button onClick={() => { const m = prompt('¿Con qué pagó? (Efectivo/Yape/Plin/Transferencia)', 'Efectivo'); if (m) marcarPagado(v, m) }} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FFEDD5', color: '#9A3412', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>💳 Cobrar</button>}<button onClick={() => toggleDevuelto(v)} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: v.costo_devuelto ? '#D1FAE5' : '#FEF3C7', color: v.costo_devuelto ? '#065F46' : '#92400E', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{v.costo_devuelto ? '✓ Devuelto' : '⏳ Falta'}</button><button onClick={() => abrirEdit(v)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>✏️</button><button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑</button></div></div></div></div>))}
           </>
         )}
         {tab === 'analisis' && (
@@ -1093,12 +1107,14 @@ export function HistorialScr(P) {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Método pago</label>
                     <select value={ef.metodo_pago} onChange={e => setEf(s => ({ ...s, metodo_pago: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}>
-                      <option value="">—</option><option value="Efectivo">Efectivo</option><option value="Yape">Yape</option><option value="Plin">Plin</option><option value="Transferencia">Transferencia</option></select></div>
+                      <option value="">—</option><option value="Efectivo">Efectivo</option><option value="Yape">Yape</option><option value="Plin">Plin</option><option value="Transferencia">Transferencia</option><option value="Por Pagar">Por Pagar (fiado)</option></select></div>
                   <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Entrega</label>
                     <select value={ef.tipo_entrega} onChange={e => setEf(s => ({ ...s, tipo_entrega: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}>
                       <option value="">—</option><option value="Tienda">Tienda</option><option value="Delivery">Delivery</option></select></div>
                 </div>
-                <label style={{ fontSize: 11, color: G.muted, display: 'block', marginTop: 8 }}>Nota</label>
+                <label style={{ fontSize: 11, color: G.muted, display: 'block', marginTop: 8 }}>Fecha de venta</label>
+                <input type="date" value={ef.fecha} onChange={e => setEf(s => ({ ...s, fecha: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box', marginBottom: 8 }} />
+                <label style={{ fontSize: 11, color: G.muted, display: 'block' }}>Nota</label>
                 <input value={ef.nota} onChange={e => setEf(s => ({ ...s, nota: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box', marginBottom: 10 }} />
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: G.text, cursor: 'pointer', background: G.goldLt, padding: 10, borderRadius: 8, marginBottom: 12 }}>
                   <input type="checkbox" checked={ef.costo_devuelto} onChange={e => setEf(s => ({ ...s, costo_devuelto: e.target.checked }))} style={{ width: 18, height: 18 }} />

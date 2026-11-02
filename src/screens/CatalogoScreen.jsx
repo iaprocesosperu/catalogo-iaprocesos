@@ -21,6 +21,9 @@ export default function CatalogoScreen(P) {
   const [carOpen, setCarOpen] = useState(false) // panel abierto
   const [carClientes, setCarClientes] = useState([])
   const [carLiq, setCarLiq] = useState(false)
+  const [liqOpen, setLiqOpen] = useState(false)
+  const [liqMetodo, setLiqMetodo] = useState('Efectivo')
+  const [liqFecha, setLiqFecha] = useState('')
 
   const cargarCarritos = async () => {
     const { data } = await supabase.from('carritos').select('*,clientes(nombre)').eq('empresa_id', eid).eq('estado', 'abierto').order('created_at')
@@ -94,14 +97,16 @@ export default function CatalogoScreen(P) {
     const car = carritos.find(c => c.id === carActivo)
     setCarLiq(true)
     try {
+      const fechaVenta = liqFecha ? new Date(liqFecha + 'T12:00:00').toISOString() : new Date().toISOString()
       // 1) una venta por prenda
       for (const it of carItems) {
         await supabase.from('ventas').insert({
           empresa_id: eid, producto_id: it.producto_id, cliente_id: car?.cliente_id || null,
           codigo_producto: it.codigo, nombre_producto: it.nombre,
           precio_costo: it.precio_costo || 0, precio_venta_original: it.precio_unit, precio_venta_real: it.precio_unit,
-          cantidad: it.cantidad, total: it.precio_unit * it.cantidad, metodo_pago: 'Efectivo', tipo_entrega: 'Tienda',
-          estado: 'entregado', costo_devuelto: false, proveedor_id: it.proveedor_id || null, origen_id: it.origen_id || null
+          cantidad: it.cantidad, total: it.precio_unit * it.cantidad, metodo_pago: liqMetodo, tipo_entrega: 'Tienda',
+          estado: 'entregado', costo_devuelto: false, proveedor_id: it.proveedor_id || null, origen_id: it.origen_id || null,
+          created_at: fechaVenta
         })
         // 2) descontar stock
         if (it.producto_id) {
@@ -118,7 +123,8 @@ export default function CatalogoScreen(P) {
       }
       // 3) cerrar carrito
       await supabase.from('carritos').update({ estado: 'liquidado' }).eq('id', carActivo)
-      notify(`✅ Carrito liquidado: S/${totalCarrito.toFixed(2)}`)
+      notify(`✅ Carrito liquidado: S/${totalCarrito.toFixed(2)} (${liqMetodo})`)
+      setLiqOpen(false); setLiqFecha(''); setLiqMetodo('Efectivo')
       await cargarCarritos(); await loadAll()
     } catch (e) { notify('Error: ' + e.message, 'error') }
     setCarLiq(false)
@@ -545,14 +551,12 @@ export default function CatalogoScreen(P) {
                 {vista === 'pequeno' ? (
                 <div style={{ display: 'flex', gap: 3, marginTop: 5 }}>
                   <button onClick={() => { setEditP(p); setScr('registrar') }} style={{ flex: 1, padding: 4, borderRadius: 5, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
-                  <button onClick={() => { setVentaP(p); setScr('venta') }} disabled={p.cantidad <= 0} style={{ flex: 1, padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? G.gold : '#ccc', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Vender</button>
-                  <button onClick={() => agregarAlCarrito(p)} disabled={p.cantidad <= 0} style={{ padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? '#059669' : '#ccc', color: '#fff', fontSize: 11, cursor: 'pointer' }}>🛒</button>
+                  <button onClick={() => agregarAlCarrito(p)} disabled={p.cantidad <= 0} style={{ flex: 1, padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? '#059669' : '#ccc', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>🛒 Vender</button>
                 </div>
                 ) : (
                 <div style={{ display: 'flex', gap: 3, marginTop: 5 }}>
                   <button onClick={() => { setEditP(p); setScr('registrar') }} style={{ flex: 1, padding: 4, borderRadius: 5, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
-                  <button onClick={() => { setVentaP(p); setScr('venta') }} disabled={p.cantidad <= 0} style={{ flex: 1, padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? G.gold : '#ccc', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Vender</button>
-                  <button onClick={() => agregarAlCarrito(p)} disabled={p.cantidad <= 0} style={{ padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? '#059669' : '#ccc', color: '#fff', fontSize: 11, cursor: 'pointer' }}>🛒</button>
+                  <button onClick={() => agregarAlCarrito(p)} disabled={p.cantidad <= 0} style={{ flex: 1, padding: 4, borderRadius: 5, border: 'none', background: p.cantidad > 0 ? '#059669' : '#ccc', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>🛒 Vender</button>
                   {p.foto_url && <button onClick={() => downloadPhoto(p.foto_url, p.codigo)} style={{ padding: 4, borderRadius: 5, border: '1px solid ' + G.border, background: 'transparent', color: G.gold, fontSize: 9, cursor: 'pointer' }}>📥</button>}
                   <button onClick={() => eliminar(p)} style={{ padding: 4, borderRadius: 5, border: '1px solid #eee', background: 'transparent', color: G.err, fontSize: 9, cursor: 'pointer' }}>🗑</button>
                 </div>
@@ -662,11 +666,29 @@ export default function CatalogoScreen(P) {
                     <span style={{ fontSize: 13, color: G.muted }}>{carItems.length} prendas</span>
                     <span style={{ fontSize: 22, fontWeight: 900, color: '#059669' }}>Total: S/{totalCarrito.toFixed(2)}</span>
                   </div>
-                  <button onClick={liquidarCarrito} disabled={carLiq || !carItems.length} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: carItems.length ? '#059669' : '#ccc', color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>{carLiq ? '⏳ Liquidando...' : '💰 Liquidar venta'}</button>
+                  <button onClick={() => { setLiqMetodo('Efectivo'); setLiqFecha(''); setLiqOpen(true) }} disabled={carLiq || !carItems.length} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: carItems.length ? '#059669' : '#ccc', color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>💰 Liquidar venta</button>
                   <button onClick={() => cerrarCarritoVacio(carActivo)} style={{ width: '100%', padding: 10, marginTop: 8, borderRadius: 10, border: '1px solid ' + G.border, background: 'transparent', color: G.err, fontSize: 13, cursor: 'pointer' }}>🗑 Descartar carrito</button>
                 </>
               )}
             </div>
+
+            {/* Sub-diálogo: método + fecha al liquidar */}
+            {liqOpen && (
+              <div onClick={() => setLiqOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 180, padding: 16 }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 360 }}>
+                  <h3 style={{ margin: '0 0 4px', fontSize: 16, color: G.text }}>💰 Liquidar — S/{totalCarrito.toFixed(2)}</h3>
+                  <p style={{ fontSize: 12, color: G.muted, margin: '0 0 14px' }}>{carItems.length} prendas</p>
+                  <label style={{ fontSize: 11, color: G.muted }}>Método de pago</label>
+                  <select value={liqMetodo} onChange={e => setLiqMetodo(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 14, background: '#fff', marginBottom: 10, boxSizing: 'border-box' }}>
+                    <option value="Efectivo">💵 Efectivo</option><option value="Yape">📱 Yape</option><option value="Plin">📱 Plin</option><option value="Transferencia">🏦 Transferencia</option><option value="Por Pagar">⏳ Por Pagar (fiado)</option>
+                  </select>
+                  <label style={{ fontSize: 11, color: G.muted }}>Fecha de venta (vacío = hoy)</label>
+                  <input type="date" value={liqFecha} onChange={e => setLiqFecha(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 14, boxSizing: 'border-box', marginBottom: 14 }} />
+                  <button onClick={liquidarCarrito} disabled={carLiq} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: '#059669', color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>{carLiq ? '⏳ Liquidando...' : '✅ Confirmar venta'}</button>
+                  <button onClick={() => setLiqOpen(false)} style={{ width: '100%', padding: 10, marginTop: 8, borderRadius: 10, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
