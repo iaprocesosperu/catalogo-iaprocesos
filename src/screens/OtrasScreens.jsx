@@ -869,12 +869,12 @@ export function HistorialScr(P) {
   const [provList, setProvList] = useState([])
   useEffect(() => { (async () => { const { data } = await supabase.from('proveedores').select('*').eq('empresa_id', eid).eq('activo', true).order('nombre'); if (data) setProvList(data) })() }, [eid])
   const [editV, setEditV] = useState(null) // venta en edición
-  const [ef, setEf] = useState({ cantidad: '', precio_venta_real: '', cliente_id: '', metodo_pago: '', tipo_entrega: '', nota: '', costo_devuelto: false })
+  const [ef, setEf] = useState({ cantidad: '', precio_venta_real: '', precio_costo: '', cliente_id: '', metodo_pago: '', tipo_entrega: '', nota: '', costo_devuelto: false })
   const [guardandoV, setGuardandoV] = useState(false)
 
   const abrirEdit = (v) => {
     setEditV(v)
-    setEf({ cantidad: String(v.cantidad), precio_venta_real: String(v.precio_venta_real), cliente_id: v.cliente_id || '', metodo_pago: v.metodo_pago || '', tipo_entrega: v.tipo_entrega || '', nota: v.nota || '', costo_devuelto: !!v.costo_devuelto })
+    setEf({ cantidad: String(v.cantidad), precio_venta_real: String(v.precio_venta_real), precio_costo: v.precio_costo != null ? String(v.precio_costo) : '', cliente_id: v.cliente_id || '', metodo_pago: v.metodo_pago || '', tipo_entrega: v.tipo_entrega || '', nota: v.nota || '', costo_devuelto: !!v.costo_devuelto })
   }
 
   const guardarEdit = async () => {
@@ -901,6 +901,7 @@ export function HistorialScr(P) {
       await supabase.from('ventas').update({
         cantidad: nuevaCant,
         precio_venta_real: nuevoPV,
+        precio_costo: ef.precio_costo !== '' ? parseFloat(ef.precio_costo) : 0,
         total: nuevoPV * nuevaCant,
         cliente_id: ef.cliente_id || null,
         metodo_pago: ef.metodo_pago || null,
@@ -1079,7 +1080,11 @@ export function HistorialScr(P) {
                   <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Cantidad</label><input type="number" value={ef.cantidad} onChange={e => setEf(s => ({ ...s, cantidad: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} /></div>
                   <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: G.muted }}>Precio venta</label><input type="number" value={ef.precio_venta_real} onChange={e => setEf(s => ({ ...s, precio_venta_real: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} /></div>
                 </div>
-                <p style={{ fontSize: 10, color: G.warn, margin: '4px 0 10px' }}>⚠️ Cambiar la cantidad ajusta el stock del producto.</p>
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ fontSize: 11, color: G.muted }}>Costo (lo que te costó)</label>
+                  <input type="number" value={ef.precio_costo} onChange={e => setEf(s => ({ ...s, precio_costo: e.target.value }))} placeholder="0" style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+                <p style={{ fontSize: 10, color: G.warn, margin: '4px 0 10px' }}>⚠️ Cambiar la cantidad ajusta el stock. El costo afecta la ganancia.</p>
                 <label style={{ fontSize: 11, color: G.muted }}>Cliente</label>
                 <select value={ef.cliente_id} onChange={e => setEf(s => ({ ...s, cliente_id: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 8, boxSizing: 'border-box' }}>
                   <option value="">— Sin cliente —</option>

@@ -231,7 +231,7 @@ export default function CatalogoScreen(P) {
   const fl = prods.filter(p =>
     (!f || p.nombre?.toLowerCase().includes(f.toLowerCase()) || p.codigo?.toLowerCase().includes(f.toLowerCase())) &&
     (!fOrigen || p.origenes?.nombre === fOrigen) &&
-    (!ocultarAgotados || p.cantidad > 0) &&
+    (verGenericos || !ocultarAgotados || p.cantidad > 0) &&
     (verOcultos ? true : !p.oculto) &&
     (verGenericos ? p.es_generico : true)
   )
