@@ -873,6 +873,8 @@ export function HistorialScr(P) {
   const [filPorPagar, setFilPorPagar] = useState(false)
   const [agrupar, setAgrupar] = useState('detalle') // detalle | cliente | fecha | origen
   const [fotoVenta, setFotoVenta] = useState(null) // {foto, nombre, codigo} para ver imagen
+  const [verDeben, setVerDeben] = useState(false)
+  const [debenAbierto, setDebenAbierto] = useState({})
   const [gruposAbiertos, setGruposAbiertos] = useState({})
   const toggleGrupo = (k) => setGruposAbiertos(s => ({ ...s, [k]: !s[k] }))
   const [guardandoV, setGuardandoV] = useState(false)
@@ -979,6 +981,25 @@ export function HistorialScr(P) {
     await loadAll()
   }
 
+  // Deuda (fiado) agrupada por cliente
+  const debenPorCliente = (() => {
+    const mapa = {}
+    fl.filter(v => v.metodo_pago === 'Por Pagar').forEach(v => {
+      const clave = v.cliente_id || 'sin'
+      if (!mapa[clave]) mapa[clave] = { clave, nombre: v.clientes?.nombre || 'Sin cliente', total: 0, ventas: [] }
+      mapa[clave].total += v.total
+      mapa[clave].ventas.push(v)
+    })
+    return Object.values(mapa).sort((a, b) => b.total - a.total)
+  })()
+  const cobrarCliente = async (grupo) => {
+    const m = prompt(`${grupo.nombre} debe S/${grupo.total.toFixed(2)}. ¿Con qué pagó? (Efectivo/Yape/Plin/Transferencia)`, 'Efectivo')
+    if (!m) return
+    await supabase.from('ventas').update({ metodo_pago: m }).in('id', grupo.ventas.map(v => v.id))
+    notify(`✅ ${grupo.nombre}: S/${grupo.total.toFixed(2)} cobrado`)
+    await loadAll()
+  }
+
   // Agrupación de ventas
   const grupos = (() => {
     if (agrupar === 'detalle') return null
@@ -1007,6 +1028,7 @@ export function HistorialScr(P) {
       { k: 'total', l: 'Total' }, { k: r => ((r.precio_venta_real - r.precio_costo) * r.cantidad).toFixed(2), l: 'Ganancia' },
       { k: 'metodo_pago', l: 'Pago' }, { k: 'tipo_entrega', l: 'Entrega' },
       { k: r => r.clientes?.nombre || '', l: 'Cliente' },
+      { k: r => r.origenes?.nombre || '', l: 'Origen' },
       { k: r => r.proveedores?.nombre || '', l: 'Proveedor' },
       { k: r => r.costo_devuelto ? 'SI' : 'NO', l: 'Costo devuelto' }
     ]); notify('Exportado')
@@ -1075,8 +1097,9 @@ export function HistorialScr(P) {
           </div>
         )}
         {tPorCobrar > 0 && (
-          <div style={{ background: '#FFEDD5', border: '1px solid #D97706', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#9A3412', fontWeight: 700 }}>
-            💳 Te deben (fiado / por pagar): S/{tPorCobrar.toFixed(2)}
+          <div onClick={() => setVerDeben(true)} style={{ background: '#FFEDD5', border: '1px solid #D97706', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#9A3412', fontWeight: 700, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>💳 Te deben (fiado / por pagar): S/{tPorCobrar.toFixed(2)}</span>
+            <span style={{ fontSize: 11, textDecoration: 'underline' }}>Ver quién →</span>
           </div>
         )}
         {tab === 'lista' && (
@@ -1116,6 +1139,41 @@ export function HistorialScr(P) {
               {porMetodo.map(m => (<div key={m.metodo} style={{ background: G.goldLt, borderRadius: 10, padding: '10px 14px', textAlign: 'center', minWidth: 100 }}><p style={{ fontSize: 18, margin: 0 }}>{m.metodo === 'Efectivo' ? '💵' : '📱'}</p><p style={{ fontSize: 12, fontWeight: 700, margin: '4px 0 2px' }}>{m.metodo}</p><p style={{ fontSize: 11, color: G.gold, fontWeight: 800, margin: 0 }}>S/{m.total.toFixed(0)}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{m.cant} ventas</p></div>))}
             </div>
           </>
+        )}
+
+        {verDeben && (
+          <div onClick={() => setVerDeben(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 156, padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 400, maxHeight: '90vh', overflow: 'auto' }}>
+              <div style={{ background: '#D97706', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
+                <div><p style={{ color: '#fff', fontSize: 15, fontWeight: 800, margin: 0 }}>💳 Quién te debe</p><p style={{ color: 'rgba(255,255,255,0.9)', fontSize: 11, margin: 0 }}>Total: S/{tPorCobrar.toFixed(2)}</p></div>
+                <button onClick={() => setVerDeben(false)} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 8, width: 30, height: 30, color: '#fff', fontSize: 16, cursor: 'pointer' }}>✕</button>
+              </div>
+              <div style={{ padding: 14 }}>
+                {debenPorCliente.map(g => (
+                  <div key={g.clave} style={{ marginBottom: 8, border: '1px solid ' + G.border, borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#FFF7ED' }}>
+                      <div onClick={() => setDebenAbierto(s => ({ ...s, [g.clave]: !s[g.clave] }))} style={{ flex: 1, cursor: 'pointer' }}>
+                        <p style={{ fontSize: 13, fontWeight: 800, margin: 0, color: G.text }}>{debenAbierto[g.clave] ? '▼ ' : '▶ '}{g.nombre}</p>
+                        <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{g.ventas.length} prenda(s)</p>
+                      </div>
+                      <span style={{ fontSize: 16, fontWeight: 900, color: '#9A3412', marginRight: 8 }}>S/{g.total.toFixed(2)}</span>
+                      <button onClick={() => cobrarCliente(g)} style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: G.ok, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>💰 Cobrar todo</button>
+                    </div>
+                    {debenAbierto[g.clave] && (
+                      <div style={{ padding: '4px 12px 8px' }}>
+                        {g.ventas.map(v => (
+                          <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '4px 0', borderTop: '1px solid ' + G.border }}>
+                            <span>{v.nombre_producto} ({v.codigo_producto})</span>
+                            <span style={{ fontWeight: 700 }}>S/{v.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
 
         {fotoVenta && (
