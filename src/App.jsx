@@ -111,7 +111,7 @@ export default function App() {
       supabase.from('colores').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
       supabase.from('productos').select('*,categorias(nombre),origenes(nombre),lineas(nombre),secciones(nombre)').eq('empresa_id', id).eq('activo', true).order('created_at', { ascending: false }),
       supabase.from('clientes').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
-      supabase.from('ventas').select('*,clientes(nombre),proveedores(nombre),origenes(nombre)').eq('empresa_id', id).order('created_at', { ascending: false }),
+      supabase.from('ventas').select('*,clientes(nombre),proveedores(nombre),origenes(nombre),productos(foto_url)').eq('empresa_id', id).order('created_at', { ascending: false }),
       supabase.from('listas_tallas').select('*').eq('activo', true).order('nombre'),
       supabase.from('secciones').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
       supabase.from('pedidos').select('*').eq('empresa_id', id).order('created_at', { ascending: false })
