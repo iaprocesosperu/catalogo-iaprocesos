@@ -1,18 +1,72 @@
 import { useState, useRef, useEffect } from 'react'
 import { supabase, subirFoto, comprimirImagen } from '../supabase'
 import { G } from '../constants'
-import { downloadPhoto, exportCSV } from '../helpers'
+import { downloadPhoto, exportCSV, detectColor } from '../helpers'
 import { LineSel } from '../components/index'
 import PhotoViewerModal from '../components/PhotoViewerModal'
 
 export default function CatalogoScreen(P) {
-  const { tit, lineas, linAct, setLinAct, prods, oris, cats, eid, lid, setScr, setEditP, setVentaP, logout, notify, loadAll, emp, setRetorno } = P
+  const { tit, lineas, linAct, setLinAct, prods, allProds, oris, cats, eid, lid, setScr, setEditP, setVentaP, logout, notify, loadAll, emp, setRetorno } = P
   const [f, setF] = useState('')
   const [fOrigen, setFOrigen] = useState('')
   const [viewerProd, setViewerProd] = useState(null)
   const [ocultarAgotados, setOcultarAgotados] = useState(true)
   const [verOcultos, setVerOcultos] = useState(false)
   const [verGenericos, setVerGenericos] = useState(false)
+
+  // ── Búsqueda visual (foto) ──
+  const [bvOpen, setBvOpen] = useState(false)       // menú de foto abierto
+  const [bvFoto, setBvFoto] = useState(null)        // {blob, preview} pendiente de elegir modo
+  const [bvIds, setBvIds] = useState(null)          // ids resultantes (null = sin búsqueda visual activa)
+  const [bvLabel, setBvLabel] = useState('')        // etiqueta mostrada
+  const [bvBusy, setBvBusy] = useState(false)
+  const bvGalRef = useRef(null)
+  const bvCamRef = useRef(null)
+  const RAILWAY = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_RAILWAY_URL) || emp?.railway_url || ''
+
+  const recibirFotoBV = (file) => { if (!file) return; setBvFoto({ blob: file, preview: URL.createObjectURL(file) }) }
+  useEffect(() => {
+    if (!bvOpen) return
+    const onPaste = (e) => { const items = e.clipboardData?.items; if (!items) return; for (const it of items) { if (it.type.startsWith('image/')) { const f = it.getAsFile(); if (f) { recibirFotoBV(f); notify('📋 Foto pegada') } break } } }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [bvOpen])
+
+  const buscarColor = async () => {
+    if (!bvFoto?.blob) return
+    setBvBusy(true)
+    try {
+      const url = URL.createObjectURL(bvFoto.blob); const color = await detectColor(url); URL.revokeObjectURL(url)
+      if (color) {
+        const base = allProds || prods
+        const found = base.filter(p => p.color?.toLowerCase() === color.toLowerCase() || p.nombre?.toLowerCase().includes(color.toLowerCase()))
+        setBvIds(new Set(found.map(p => p.id))); setBvLabel('🎨 Color: ' + color)
+        notify(found.length + ' resultado(s) para ' + color)
+      } else notify('No se pudo detectar color', 'error')
+    } catch (e) { notify('Error al detectar color', 'error') }
+    setBvBusy(false); setBvOpen(false); setBvFoto(null)
+  }
+  const buscarSimilar = async () => {
+    if (!bvFoto?.blob) return
+    if (!RAILWAY) { notify('Búsqueda similar no está configurada; usa Por color', 'error'); return }
+    setBvBusy(true)
+    try {
+      const base = allProds || prods
+      const prodsConHash = base.filter(p => p.imagen_hash)
+      if (!prodsConHash.length) { notify('No hay productos vectorizados aún', 'error'); setBvBusy(false); return }
+      const hashes = JSON.stringify(prodsConHash.map(p => ({ id: p.id, hash: p.imagen_hash, codigo: p.codigo, nombre: p.nombre })))
+      const fd = new FormData()
+      fd.append('imagen', bvFoto.blob instanceof File ? bvFoto.blob : new File([bvFoto.blob], 'search.jpg'))
+      const resp = await fetch(RAILWAY + '/buscar-similar', { method: 'POST', headers: { 'hashes': hashes }, body: fd })
+      const data = await resp.json()
+      if (data.resultados?.length) {
+        setBvIds(new Set(data.resultados.map(r => r.id))); setBvLabel('🔍 Similares (' + data.resultados.length + ')')
+        notify(data.resultados.length + ' similares')
+      } else { notify('No se encontraron similares', 'error') }
+    } catch (e) { notify('Error: ' + e.message, 'error') }
+    setBvBusy(false); setBvOpen(false); setBvFoto(null)
+  }
+  const limpiarBV = () => { setBvIds(null); setBvLabel('') }
 
   // ── CARRITOS (POS multi-cliente) ──
   const [carritos, setCarritos] = useState([])
@@ -239,7 +293,8 @@ export default function CatalogoScreen(P) {
     (!fOrigen || p.origenes?.nombre === fOrigen) &&
     (verGenericos || !ocultarAgotados || p.cantidad > 0) &&
     (verOcultos ? true : !p.oculto) &&
-    (verGenericos ? p.es_generico : true)
+    (verGenericos ? p.es_generico : true) &&
+    (!bvIds || bvIds.has(p.id))
   )
 
   // ── Selección múltiple + ZIP fotos ──
@@ -476,8 +531,17 @@ export default function CatalogoScreen(P) {
           </div>
           <input ref={fileZipRef} type="file" accept=".zip" onChange={subirZip} style={{ display: 'none' }} />
         </div>
-        <input value={f} onChange={e => setF(e.target.value)} placeholder="Filtrar por nombre, código..."
-          style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: 'none', fontSize: 14, background: 'rgba(255,255,255,0.9)', boxSizing: 'border-box' }} />
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input value={f} onChange={e => setF(e.target.value)} placeholder="Filtrar por nombre, código..."
+            style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: 'none', fontSize: 14, background: 'rgba(255,255,255,0.9)', boxSizing: 'border-box' }} />
+          <button onClick={() => { setBvOpen(true); setBvFoto(null) }} style={{ padding: '10px 14px', borderRadius: 10, border: 'none', background: '#fff', color: G.gold, fontSize: 16, cursor: 'pointer', fontWeight: 700 }}>📷</button>
+        </div>
+        {bvLabel && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.9)', borderRadius: 8, padding: '6px 12px', marginTop: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: G.goldDk }}>{bvLabel}</span>
+            <button onClick={limpiarBV} style={{ background: 'none', border: 'none', color: G.err, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✕ Quitar</button>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
           {origenesDisp.length > 0 && (
             <select value={fOrigen} onChange={e => setFOrigen(e.target.value)}
@@ -606,6 +670,37 @@ export default function CatalogoScreen(P) {
               </div>
               <button onClick={editarDesdeNav} style={{ width: '100%', padding: 13, marginTop: 8, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>✏️ Editar en catálogo</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: búsqueda visual */}
+      {bvOpen && (
+        <div onClick={() => { setBvOpen(false); setBvFoto(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 165, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 360 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 16, color: G.text }}>📷 Buscar por foto</h3>
+            <p style={{ fontSize: 12, color: G.muted, margin: '0 0 14px' }}>Toma, carga o pega una foto (Ctrl+V)</p>
+            {bvFoto ? (
+              <>
+                <img src={bvFoto.preview} alt="" style={{ width: '100%', height: 200, objectFit: 'contain', borderRadius: 10, background: G.goldLt, marginBottom: 12 }} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={buscarColor} disabled={bvBusy} style={{ flex: 1, padding: 13, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{bvBusy ? '⏳' : '🎨 Por color'}</button>
+                  <button onClick={buscarSimilar} disabled={bvBusy} style={{ flex: 1, padding: 13, borderRadius: 10, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{bvBusy ? '⏳' : '🔍 Similar'}</button>
+                </div>
+                <button onClick={() => setBvFoto(null)} style={{ width: '100%', padding: 10, marginTop: 8, borderRadius: 10, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Otra foto</button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => bvGalRef.current?.click()} style={{ flex: 1, padding: 16, borderRadius: 10, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>🖼️ Galería</button>
+                  <button onClick={() => bvCamRef.current?.click()} style={{ flex: 1, padding: 16, borderRadius: 10, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>📷 Cámara</button>
+                </div>
+                <p style={{ fontSize: 11, color: G.muted, textAlign: 'center', margin: '10px 0 0' }}>o pega una imagen con Ctrl+V</p>
+              </>
+            )}
+            <input ref={bvGalRef} type="file" accept="image/*" onChange={e => { const f2 = e.target.files?.[0]; if (f2) recibirFotoBV(f2); e.target.value = '' }} style={{ display: 'none' }} />
+            <input ref={bvCamRef} type="file" accept="image/*" capture="environment" onChange={e => { const f2 = e.target.files?.[0]; if (f2) recibirFotoBV(f2); e.target.value = '' }} style={{ display: 'none' }} />
+            <button onClick={() => { setBvOpen(false); setBvFoto(null) }} style={{ width: '100%', padding: 10, marginTop: 12, borderRadius: 10, border: 'none', background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
           </div>
         </div>
       )}
