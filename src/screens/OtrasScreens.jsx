@@ -871,6 +871,9 @@ export function HistorialScr(P) {
   const [editV, setEditV] = useState(null) // venta en edición
   const [ef, setEf] = useState({ cantidad: '', precio_venta_real: '', precio_costo: '', cliente_id: '', metodo_pago: '', tipo_entrega: '', nota: '', costo_devuelto: false, fecha: '' })
   const [filPorPagar, setFilPorPagar] = useState(false)
+  const [agrupar, setAgrupar] = useState('detalle') // detalle | cliente | fecha | origen
+  const [gruposAbiertos, setGruposAbiertos] = useState({})
+  const toggleGrupo = (k) => setGruposAbiertos(s => ({ ...s, [k]: !s[k] }))
   const [guardandoV, setGuardandoV] = useState(false)
 
   const abrirEdit = (v) => {
@@ -975,6 +978,24 @@ export function HistorialScr(P) {
     await loadAll()
   }
 
+  // Agrupación de ventas
+  const grupos = (() => {
+    if (agrupar === 'detalle') return null
+    const mapa = {}
+    fl.forEach(v => {
+      let clave, etiqueta
+      if (agrupar === 'cliente') { clave = v.cliente_id || 'sin'; etiqueta = v.clientes?.nombre || 'Sin cliente' }
+      else if (agrupar === 'fecha') { clave = new Date(v.created_at).toLocaleDateString('es-PE'); etiqueta = clave }
+      else { clave = v.origen_id || 'sin'; etiqueta = v.origenes?.nombre || 'Sin origen' }
+      if (!mapa[clave]) mapa[clave] = { clave, etiqueta, ventas: [], total: 0, ganancia: 0, prendas: 0 }
+      mapa[clave].ventas.push(v)
+      mapa[clave].total += v.total
+      mapa[clave].ganancia += (v.precio_venta_real - v.precio_costo) * v.cantidad
+      mapa[clave].prendas += v.cantidad
+    })
+    return Object.values(mapa).sort((a, b) => b.total - a.total)
+  })()
+
   const exp = () => {
     exportCSV(fl, 'ventas_' + new Date().toISOString().split('T')[0], [
       { k: r => new Date(r.created_at).toLocaleDateString('es-PE'), l: 'Fecha' },
@@ -1011,6 +1032,8 @@ export function HistorialScr(P) {
   const maxDia = porDia[0]?.total || 1
   const maxProd = porProducto[0]?.cant || 1
   const tabStyle = (t) => ({ flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: tab === t ? G.gold : '#F5F5F5', color: tab === t ? '#fff' : G.muted })
+
+  const renderVenta = (v) => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p>{(v.proveedores?.nombre || v.origenes?.nombre) && <p style={{ fontSize: 10, color: G.goldDk, margin: '2px 0 0', fontWeight: 700 }}>{v.proveedores?.nombre ? '🏷️ ' + v.proveedores.nombre : ''}{v.origenes?.nombre ? (v.proveedores?.nombre ? ' • ' : '') + '📋 ' + v.origenes.nombre : ''}</p>}</div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<div style={{ marginTop: 4, display: 'flex', gap: 3, justifyContent: 'flex-end', flexWrap: 'wrap' }}>{v.metodo_pago === 'Por Pagar' && <button onClick={() => { const m = prompt('¿Con qué pagó? (Efectivo/Yape/Plin/Transferencia)', 'Efectivo'); if (m) marcarPagado(v, m) }} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FFEDD5', color: '#9A3412', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>💳 Cobrar</button>}<button onClick={() => toggleDevuelto(v)} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: v.costo_devuelto ? '#D1FAE5' : '#FEF3C7', color: v.costo_devuelto ? '#065F46' : '#92400E', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{v.costo_devuelto ? '✓ Devuelto' : '⏳ Falta'}</button><button onClick={() => abrirEdit(v)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>✏️</button><button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑</button></div></div></div></div>)
 
   return (
     <div>
@@ -1061,8 +1084,22 @@ export function HistorialScr(P) {
               <span style={{ fontSize: 12, color: G.muted }}>{fl.length} ventas</span>
               <button onClick={exp} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>📥 Excel</button>
             </div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+              {[['detalle','📋 Detallado'],['cliente','👥 Cliente'],['fecha','📅 Fecha'],['origen','📦 Origen']].map(([k,lbl]) => (
+                <button key={k} onClick={() => setAgrupar(k)} style={{ padding: '6px 12px', borderRadius: 16, border: '1px solid ' + (agrupar === k ? G.gold : G.border), background: agrupar === k ? G.gold : '#fff', color: agrupar === k ? '#fff' : G.text, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{lbl}</button>
+              ))}
+            </div>
             {fl.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: G.muted }}><p style={{ fontSize: 32 }}>📋</p><p>No hay ventas</p></div>
-              : fl.map(v => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p>{(v.proveedores?.nombre || v.origenes?.nombre) && <p style={{ fontSize: 10, color: G.goldDk, margin: '2px 0 0', fontWeight: 700 }}>{v.proveedores?.nombre ? '🏷️ ' + v.proveedores.nombre : ''}{v.origenes?.nombre ? (v.proveedores?.nombre ? ' • ' : '') + '📋 ' + v.origenes.nombre : ''}</p>}</div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<div style={{ marginTop: 4, display: 'flex', gap: 3, justifyContent: 'flex-end', flexWrap: 'wrap' }}>{v.metodo_pago === 'Por Pagar' && <button onClick={() => { const m = prompt('¿Con qué pagó? (Efectivo/Yape/Plin/Transferencia)', 'Efectivo'); if (m) marcarPagado(v, m) }} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FFEDD5', color: '#9A3412', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>💳 Cobrar</button>}<button onClick={() => toggleDevuelto(v)} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: v.costo_devuelto ? '#D1FAE5' : '#FEF3C7', color: v.costo_devuelto ? '#065F46' : '#92400E', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{v.costo_devuelto ? '✓ Devuelto' : '⏳ Falta'}</button><button onClick={() => abrirEdit(v)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>✏️</button><button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑</button></div></div></div></div>))}
+              : agrupar === 'detalle' ? fl.map(v => renderVenta(v))
+              : (grupos || []).map(g => (
+                <div key={g.clave} style={{ marginBottom: 8 }}>
+                  <div onClick={() => toggleGrupo(g.clave)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: G.goldLt, borderRadius: 10, padding: '10px 14px', cursor: 'pointer', border: '1px solid ' + G.border }}>
+                    <div><p style={{ fontSize: 13, fontWeight: 800, margin: 0, color: G.text }}>{gruposAbiertos[g.clave] ? '▼ ' : '▶ '}{g.etiqueta}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0 0' }}>{g.ventas.length} ventas • {g.prendas} prendas</p></div>
+                    <div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 900, color: G.gold, margin: 0 }}>S/{g.total.toFixed(2)}</p><p style={{ fontSize: 10, color: G.ok, margin: 0, fontWeight: 700 }}>+S/{g.ganancia.toFixed(2)}</p></div>
+                  </div>
+                  {gruposAbiertos[g.clave] && <div style={{ marginTop: 6, paddingLeft: 6 }}>{g.ventas.map(v => renderVenta(v))}</div>}
+                </div>
+              ))}
           </>
         )}
         {tab === 'analisis' && (
