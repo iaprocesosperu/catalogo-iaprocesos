@@ -104,6 +104,21 @@ export default function CatalogoScreen(P) {
     await supabase.from('carritos').update({ cliente_id: clienteId || null }).eq('id', cid)
     await cargarCarritos()
   }
+  const nuevoClienteRapido = async () => {
+    const nombre = prompt('Nombre del nuevo cliente:')
+    if (!nombre || !nombre.trim()) return
+    const norm = nombre.trim().toLowerCase()
+    const existe = carClientes.find(c => c.nombre?.trim().toLowerCase() === norm)
+    if (existe) { await cambiarClienteCarrito(carActivo, existe.id); const { data } = await supabase.from('clientes').select('id,nombre').eq('empresa_id', eid).eq('activo', true).order('nombre'); if (data) setCarClientes(data); notify('Ese cliente ya existía, lo asigné'); return }
+    const tel = prompt('Teléfono (opcional):') || null
+    const cod = 'C' + String(carClientes.length + 1).padStart(4, '0')
+    const { data: nc, error } = await supabase.from('clientes').insert({ empresa_id: eid, codigo: cod, nombre: nombre.trim(), telefono: tel }).select().single()
+    if (error) { notify('Error: ' + error.message, 'error'); return }
+    const { data } = await supabase.from('clientes').select('id,nombre').eq('empresa_id', eid).eq('activo', true).order('nombre')
+    if (data) setCarClientes(data)
+    await cambiarClienteCarrito(carActivo, nc.id)
+    notify('✅ Cliente creado y asignado')
+  }
   const cerrarCarritoVacio = async (cid) => {
     if (!confirm('¿Descartar este carrito?')) return
     await supabase.from('carritos').delete().eq('id', cid)
@@ -734,10 +749,13 @@ export default function CatalogoScreen(P) {
                 <>
                   {/* Cliente del carrito */}
                   <label style={{ fontSize: 11, color: G.muted }}>Cliente de este carrito</label>
-                  <select value={carritos.find(c => c.id === carActivo)?.cliente_id || ''} onChange={e => cambiarClienteCarrito(carActivo, e.target.value)} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 12, boxSizing: 'border-box' }}>
-                    <option value="">— Sin cliente —</option>
-                    {carClientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                  </select>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                    <select value={carritos.find(c => c.id === carActivo)?.cliente_id || ''} onChange={e => cambiarClienteCarrito(carActivo, e.target.value)} style={{ flex: 1, padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}>
+                      <option value="">— Sin cliente —</option>
+                      {carClientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    </select>
+                    <button onClick={nuevoClienteRapido} style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Nuevo</button>
+                  </div>
 
                   {/* Items */}
                   {carItems.length === 0 ? (
