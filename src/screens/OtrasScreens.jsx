@@ -990,14 +990,7 @@ export function HistorialScr(P) {
       mapa[clave].total += v.total
       mapa[clave].ventas.push(v)
     })
-    const arr = Object.values(mapa)
-    if (agrupar === 'fecha') {
-      arr.sort((a, b) => {
-        const pa = a.etiqueta.split('/'), pb = b.etiqueta.split('/')
-        return new Date(+pb[2], +pb[1] - 1, +pb[0]) - new Date(+pa[2], +pa[1] - 1, +pa[0])
-      })
-    } else arr.sort((a, b) => b.total - a.total)
-    return arr
+    return Object.values(mapa).sort((a, b) => b.total - a.total)
   })()
   const cobrarCliente = async (grupo) => {
     const m = prompt(`${grupo.nombre} debe S/${grupo.total.toFixed(2)}. ¿Con qué pagó? (Efectivo/Yape/Plin/Transferencia)`, 'Efectivo')
@@ -1016,13 +1009,18 @@ export function HistorialScr(P) {
       if (agrupar === 'cliente') { clave = v.cliente_id || 'sin'; etiqueta = v.clientes?.nombre || 'Sin cliente' }
       else if (agrupar === 'fecha') { clave = new Date(v.created_at).toLocaleDateString('es-PE'); etiqueta = clave }
       else { clave = v.origen_id || 'sin'; etiqueta = v.origenes?.nombre || 'Sin origen' }
-      if (!mapa[clave]) mapa[clave] = { clave, etiqueta, ventas: [], total: 0, ganancia: 0, prendas: 0 }
+      if (!mapa[clave]) mapa[clave] = { clave, etiqueta, ventas: [], total: 0, ganancia: 0, prendas: 0, orden: 0 }
       mapa[clave].ventas.push(v)
       mapa[clave].total += v.total
       mapa[clave].ganancia += (v.precio_venta_real - v.precio_costo) * v.cantidad
       mapa[clave].prendas += v.cantidad
+      const t = new Date(v.created_at).getTime()
+      if (t > mapa[clave].orden) mapa[clave].orden = t
     })
-    return Object.values(mapa).sort((a, b) => b.total - a.total)
+    const arr = Object.values(mapa)
+    if (agrupar === 'fecha') arr.sort((a, b) => b.orden - a.orden)
+    else arr.sort((a, b) => b.total - a.total)
+    return arr
   })()
 
   const exp = () => {
