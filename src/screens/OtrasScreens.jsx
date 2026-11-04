@@ -875,6 +875,9 @@ export function HistorialScr(P) {
   const [fotoVenta, setFotoVenta] = useState(null) // {foto, nombre, codigo} para ver imagen
   const [verDeben, setVerDeben] = useState(false)
   const [debenAbierto, setDebenAbierto] = useState({})
+  const [modoSelV, setModoSelV] = useState(false)
+  const [selV, setSelV] = useState([])
+  const toggleSelV = (id) => setSelV(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
   const [gruposAbiertos, setGruposAbiertos] = useState({})
   const toggleGrupo = (k) => setGruposAbiertos(s => ({ ...s, [k]: !s[k] }))
   const [guardandoV, setGuardandoV] = useState(false)
@@ -992,6 +995,71 @@ export function HistorialScr(P) {
     })
     return Object.values(mapa).sort((a, b) => b.total - a.total)
   })()
+  const enviarLiquidacion = async () => {
+    const ventas = fl.filter(v => selV.includes(v.id))
+    if (!ventas.length) { notify('Selecciona ventas primero', 'error'); return }
+    const cliente = ventas[0].clientes?.nombre || 'Cliente'
+    const fecha = new Date().toLocaleDateString('es-PE')
+    const total = ventas.reduce((s, v) => s + v.total, 0)
+    // Canvas tipo ticket
+    const W = 600, pad = 32, lineH = 46
+    const H = 260 + ventas.length * lineH + 140
+    const c = document.createElement('canvas'); c.width = W; c.height = H
+    const ctx = c.getContext('2d')
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H)
+    // Encabezado dorado
+    ctx.fillStyle = '#C5A55A'; ctx.fillRect(0, 0, W, 110)
+    ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'
+    ctx.font = 'bold 34px Arial'; ctx.fillText(emp?.nombre || 'La Casita del Ahorro', W / 2, 50)
+    ctx.font = '18px Arial'; ctx.fillText('Comprobante de compra', W / 2, 82)
+    // Datos
+    ctx.fillStyle = '#374151'; ctx.textAlign = 'left'; ctx.font = 'bold 18px Arial'
+    ctx.fillText('Cliente: ' + cliente, pad, 150)
+    ctx.textAlign = 'right'; ctx.font = '16px Arial'; ctx.fillStyle = '#6B7280'
+    ctx.fillText('Fecha: ' + fecha, W - pad, 150)
+    // Línea
+    ctx.strokeStyle = '#E5E7EB'; ctx.beginPath(); ctx.moveTo(pad, 175); ctx.lineTo(W - pad, 175); ctx.stroke()
+    // Items
+    let y = 215
+    ctx.textAlign = 'left'
+    ventas.forEach(v => {
+      ctx.fillStyle = '#1F2937'; ctx.font = 'bold 17px Arial'
+      const nom = v.nombre_producto.length > 34 ? v.nombre_producto.slice(0, 34) + '…' : v.nombre_producto
+      ctx.fillText(nom, pad, y)
+      ctx.fillStyle = '#6B7280'; ctx.font = '14px Arial'
+      ctx.fillText(`${v.cantidad} x S/${v.precio_venta_real.toFixed(2)}`, pad, y + 20)
+      ctx.fillStyle = '#C5A55A'; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'right'
+      ctx.fillText('S/' + v.total.toFixed(2), W - pad, y + 10)
+      ctx.textAlign = 'left'
+      y += lineH
+    })
+    // Total
+    ctx.strokeStyle = '#C5A55A'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke()
+    y += 45
+    ctx.fillStyle = '#1F2937'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left'; ctx.fillText('TOTAL', pad, y)
+    ctx.fillStyle = '#C5A55A'; ctx.font = 'bold 30px Arial'; ctx.textAlign = 'right'; ctx.fillText('S/' + total.toFixed(2), W - pad, y)
+    y += 40
+    // método
+    const metodos = [...new Set(ventas.map(v => v.metodo_pago))].join(', ')
+    ctx.fillStyle = '#6B7280'; ctx.font = '15px Arial'; ctx.textAlign = 'left'; ctx.fillText('Pago: ' + metodos, pad, y)
+    // pie
+    y += 36
+    ctx.fillStyle = '#C5A55A'; ctx.font = 'italic 16px Arial'; ctx.textAlign = 'center'; ctx.fillText('¡Gracias por tu compra! 💛', W / 2, y)
+
+    c.toBlob(async (blob) => {
+      const file = new File([blob], 'liquidacion.jpg', { type: 'image/jpeg' })
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'Comprobante', text: `Compra de ${cliente} - S/${total.toFixed(2)}` }) }
+        catch (e) { if (e.name !== 'AbortError') { descargar(blob) } }
+      } else { descargar(blob) }
+    }, 'image/jpeg', 0.92)
+    function descargar(blob) {
+      const url = URL.createObjectURL(blob); const a = document.createElement('a')
+      a.href = url; a.download = `liquidacion_${cliente}_${fecha.replace(/\//g, '-')}.jpg`; a.click(); URL.revokeObjectURL(url)
+      notify('📥 Comprobante descargado')
+    }
+  }
+
   const cobrarCliente = async (grupo) => {
     const m = prompt(`${grupo.nombre} debe S/${grupo.total.toFixed(2)}. ¿Con qué pagó? (Efectivo/Yape/Plin/Transferencia)`, 'Efectivo')
     if (!m) return
@@ -1061,7 +1129,7 @@ export function HistorialScr(P) {
   const maxProd = porProducto[0]?.cant || 1
   const tabStyle = (t) => ({ flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: tab === t ? G.gold : '#F5F5F5', color: tab === t ? '#fff' : G.muted })
 
-  const renderVenta = (v) => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}><div style={{ flex: 1 }}><p onClick={() => setFotoVenta({ foto: v.productos?.foto_url, nombre: v.nombre_producto, codigo: v.codigo_producto })} style={{ fontSize: 13, fontWeight: 700, margin: 0, color: G.gold, cursor: 'pointer', textDecoration: 'underline' }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p>{(v.proveedores?.nombre || v.origenes?.nombre) && <p style={{ fontSize: 10, color: G.goldDk, margin: '2px 0 0', fontWeight: 700 }}>{v.proveedores?.nombre ? '🏷️ ' + v.proveedores.nombre : ''}{v.origenes?.nombre ? (v.proveedores?.nombre ? ' • ' : '') + '📋 ' + v.origenes.nombre : ''}</p>}</div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<div style={{ marginTop: 4, display: 'flex', gap: 3, justifyContent: 'flex-end', flexWrap: 'wrap' }}>{v.metodo_pago === 'Por Pagar' && <button onClick={() => { const m = prompt('¿Con qué pagó? (Efectivo/Yape/Plin/Transferencia)', 'Efectivo'); if (m) marcarPagado(v, m) }} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FFEDD5', color: '#9A3412', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>💳 Cobrar</button>}<button onClick={() => toggleDevuelto(v)} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: v.costo_devuelto ? '#D1FAE5' : '#FEF3C7', color: v.costo_devuelto ? '#065F46' : '#92400E', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{v.costo_devuelto ? '✓ Devuelto' : '⏳ Falta'}</button><button onClick={() => abrirEdit(v)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>✏️</button><button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑</button></div></div></div></div>)
+  const renderVenta = (v) => (<div key={v.id} style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, border: modoSelV && selV.includes(v.id) ? '2px solid ' + G.gold : '1px solid ' + G.border }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 8 }}>{modoSelV && <div onClick={() => toggleSelV(v.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 12, background: selV.includes(v.id) ? G.gold : '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer', marginTop: 2 }}>{selV.includes(v.id) ? '✓' : ''}</div>}<div style={{ flex: 1 }}><p onClick={() => setFotoVenta({ foto: v.productos?.foto_url, nombre: v.nombre_producto, codigo: v.codigo_producto })} style={{ fontSize: 13, fontWeight: 700, margin: 0, color: G.gold, cursor: 'pointer', textDecoration: 'underline' }}>{v.nombre_producto}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0' }}>{v.codigo_producto} • {v.cantidad} und • {v.metodo_pago}{v.tipo_entrega === 'Delivery' ? ' • 🛵' : ''}</p><p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{new Date(v.created_at).toLocaleDateString('es-PE')} {new Date(v.created_at).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}{v.clientes?.nombre ? ' • ' + v.clientes.nombre : ''}</p>{(v.proveedores?.nombre || v.origenes?.nombre) && <p style={{ fontSize: 10, color: G.goldDk, margin: '2px 0 0', fontWeight: 700 }}>{v.proveedores?.nombre ? '🏷️ ' + v.proveedores.nombre : ''}{v.origenes?.nombre ? (v.proveedores?.nombre ? ' • ' : '') + '📋 ' + v.origenes.nombre : ''}</p>}</div><div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 800, color: G.gold, margin: 0 }}>S/{v.total.toFixed(2)}</p><p style={{ fontSize: 9, color: G.ok, margin: '2px 0 0' }}>+S/{((v.precio_venta_real - v.precio_costo) * v.cantidad).toFixed(2)}</p>{v.precio_venta_real !== v.precio_venta_original && <p style={{ fontSize: 9, color: G.warn, margin: 0 }}>Orig: S/{v.precio_venta_original}</p>}{v.foto_yape && <span style={{ fontSize: 9, color: G.gold }}>📱 Yape</span>}<div style={{ marginTop: 4, display: 'flex', gap: 3, justifyContent: 'flex-end', flexWrap: 'wrap' }}>{v.metodo_pago === 'Por Pagar' && <button onClick={() => { const m = prompt('¿Con qué pagó? (Efectivo/Yape/Plin/Transferencia)', 'Efectivo'); if (m) marcarPagado(v, m) }} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FFEDD5', color: '#9A3412', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>💳 Cobrar</button>}<button onClick={() => toggleDevuelto(v)} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: v.costo_devuelto ? '#D1FAE5' : '#FEF3C7', color: v.costo_devuelto ? '#065F46' : '#92400E', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>{v.costo_devuelto ? '✓ Devuelto' : '⏳ Falta'}</button><button onClick={() => abrirEdit(v)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>✏️</button><button onClick={() => eliminarVenta(v)} disabled={eliminando} style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>🗑</button></div></div></div></div>)
 
   return (
     <div>
@@ -1111,6 +1179,7 @@ export function HistorialScr(P) {
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <span style={{ fontSize: 12, color: G.muted }}>{fl.length} ventas</span>
+              <button onClick={() => { setModoSelV(m => !m); setSelV([]) }} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + (modoSelV ? G.gold : G.border), background: modoSelV ? G.gold : 'transparent', color: modoSelV ? '#fff' : G.text, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{modoSelV ? '✕ Cancelar' : '📤 Liquidación'}</button>
               <button onClick={exp} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + G.gold, background: 'transparent', color: G.gold, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>📥 Excel</button>
             </div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -1124,7 +1193,10 @@ export function HistorialScr(P) {
                 <div key={g.clave} style={{ marginBottom: 8 }}>
                   <div onClick={() => toggleGrupo(g.clave)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: G.goldLt, borderRadius: 10, padding: '10px 14px', cursor: 'pointer', border: '1px solid ' + G.border }}>
                     <div><p style={{ fontSize: 13, fontWeight: 800, margin: 0, color: G.text }}>{gruposAbiertos[g.clave] ? '▼ ' : '▶ '}{g.etiqueta}</p><p style={{ fontSize: 10, color: G.muted, margin: '2px 0 0' }}>{g.ventas.length} ventas • {g.prendas} prendas</p></div>
-                    <div style={{ textAlign: 'right' }}><p style={{ fontSize: 15, fontWeight: 900, color: G.gold, margin: 0 }}>S/{g.total.toFixed(2)}</p><p style={{ fontSize: 10, color: G.ok, margin: 0, fontWeight: 700 }}>+S/{g.ganancia.toFixed(2)}</p></div>
+                    <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {modoSelV && <button onClick={(e) => { e.stopPropagation(); const ids = g.ventas.map(v => v.id); const todos = ids.every(id => selV.includes(id)); setSelV(s => todos ? s.filter(x => !ids.includes(x)) : [...new Set([...s, ...ids])]) }} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid ' + G.gold, background: '#fff', color: G.goldDk, fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>☑ Todo</button>}
+                      <div><p style={{ fontSize: 15, fontWeight: 900, color: G.gold, margin: 0 }}>S/{g.total.toFixed(2)}</p><p style={{ fontSize: 10, color: G.ok, margin: 0, fontWeight: 700 }}>+S/{g.ganancia.toFixed(2)}</p></div>
+                    </div>
                   </div>
                   {gruposAbiertos[g.clave] && <div style={{ marginTop: 6, paddingLeft: 6 }}>{g.ventas.map(v => renderVenta(v))}</div>}
                 </div>
@@ -1239,6 +1311,12 @@ export function HistorialScr(P) {
                 <button onClick={() => setEditV(null)} style={{ width: '100%', padding: 10, marginTop: 8, borderRadius: 10, border: '1px solid ' + G.border, background: 'transparent', color: G.muted, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
               </div>
             </div>
+          </div>
+        )}
+
+        {modoSelV && selV.length > 0 && (
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid ' + G.border, padding: 12, boxShadow: '0 -2px 12px rgba(0,0,0,0.12)', zIndex: 50 }}>
+            <button onClick={enviarLiquidacion} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: '#25D366', color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>📤 Enviar liquidación ({selV.length})</button>
           </div>
         )}
       </div>
