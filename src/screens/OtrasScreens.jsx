@@ -1324,7 +1324,7 @@ export function HistorialScr(P) {
         )}
 
         {modoSelV && selV.length > 0 && (
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid ' + G.border, padding: 12, boxShadow: '0 -2px 12px rgba(0,0,0,0.12)', zIndex: 50 }}>
+          <div style={{ position: 'fixed', bottom: 80, left: 0, right: 0, background: '#fff', borderTop: '1px solid ' + G.border, padding: 12, boxShadow: '0 -2px 12px rgba(0,0,0,0.12)', zIndex: 60 }}>
             <button onClick={enviarLiquidacion} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: '#25D366', color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>📤 Enviar liquidación ({selV.length})</button>
           </div>
         )}
