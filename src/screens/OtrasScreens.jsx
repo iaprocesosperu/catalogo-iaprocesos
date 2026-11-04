@@ -1046,18 +1046,27 @@ export function HistorialScr(P) {
     y += 36
     ctx.fillStyle = '#C5A55A'; ctx.font = 'italic 16px Arial'; ctx.textAlign = 'center'; ctx.fillText('¡Gracias por tu compra! 💛', W / 2, y)
 
-    c.toBlob(async (blob) => {
-      const file = new File([blob], 'liquidacion.jpg', { type: 'image/jpeg' })
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: 'Comprobante', text: `Compra de ${cliente} - S/${total.toFixed(2)}` }) }
-        catch (e) { if (e.name !== 'AbortError') { descargar(blob) } }
-      } else { descargar(blob) }
-    }, 'image/jpeg', 0.92)
-    function descargar(blob) {
-      const url = URL.createObjectURL(blob); const a = document.createElement('a')
-      a.href = url; a.download = `liquidacion_${cliente}_${fecha.replace(/\//g, '-')}.jpg`; a.click(); URL.revokeObjectURL(url)
-      notify('📥 Comprobante descargado')
+    const descargar = (blob) => {
+      try {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = `liquidacion_${cliente}_${fecha.replace(/\//g, '-')}.jpg`
+        document.body.appendChild(a); a.click(); a.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 2000)
+        notify('📥 Comprobante descargado')
+      } catch (er) { notify('Error al descargar: ' + er.message, 'error') }
     }
+    try {
+      const blob = await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('No se pudo generar la imagen')), 'image/jpeg', 0.92))
+      const file = new File([blob], 'liquidacion.jpg', { type: 'image/jpeg' })
+      const puedeCompartir = navigator.canShare && navigator.canShare({ files: [file] })
+      if (navigator.share && puedeCompartir) {
+        try { await navigator.share({ files: [file], title: 'Comprobante', text: `Compra de ${cliente} - S/${total.toFixed(2)}` }) }
+        catch (e) { if (e.name !== 'AbortError') descargar(blob) }
+      } else {
+        descargar(blob)
+      }
+    } catch (e) { notify('Error: ' + e.message, 'error') }
   }
 
   const cobrarCliente = async (grupo) => {
