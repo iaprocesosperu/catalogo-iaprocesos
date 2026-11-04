@@ -164,6 +164,7 @@ export default function CatalogoScreen(P) {
   const liquidarCarrito = async () => {
     if (!carItems.length) { notify('El carrito está vacío', 'error'); return }
     const car = carritos.find(c => c.id === carActivo)
+    if (!car?.cliente_id) { notify('Asigna un cliente antes de liquidar', 'error'); return }
     setCarLiq(true)
     try {
       const fechaVenta = liqFecha ? new Date(liqFecha + 'T12:00:00').toISOString() : new Date().toISOString()

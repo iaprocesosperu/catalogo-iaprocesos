@@ -990,7 +990,14 @@ export function HistorialScr(P) {
       mapa[clave].total += v.total
       mapa[clave].ventas.push(v)
     })
-    return Object.values(mapa).sort((a, b) => b.total - a.total)
+    const arr = Object.values(mapa)
+    if (agrupar === 'fecha') {
+      arr.sort((a, b) => {
+        const pa = a.etiqueta.split('/'), pb = b.etiqueta.split('/')
+        return new Date(+pb[2], +pb[1] - 1, +pb[0]) - new Date(+pa[2], +pa[1] - 1, +pa[0])
+      })
+    } else arr.sort((a, b) => b.total - a.total)
+    return arr
   })()
   const cobrarCliente = async (grupo) => {
     const m = prompt(`${grupo.nombre} debe S/${grupo.total.toFixed(2)}. ¿Con qué pagó? (Efectivo/Yape/Plin/Transferencia)`, 'Efectivo')
