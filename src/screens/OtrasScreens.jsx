@@ -998,6 +998,7 @@ export function HistorialScr(P) {
   const enviarLiquidacion = async () => {
     const ventas = fl.filter(v => selV.includes(v.id))
     if (!ventas.length) { notify('Selecciona ventas primero', 'error'); return }
+    notify('Generando comprobante...')
     const cliente = ventas[0].clientes?.nombre || 'Cliente'
     const fecha = new Date().toLocaleDateString('es-PE')
     const total = ventas.reduce((s, v) => s + v.total, 0)
@@ -1047,27 +1048,25 @@ export function HistorialScr(P) {
     ctx.fillStyle = '#C5A55A'; ctx.font = 'italic 16px Arial'; ctx.textAlign = 'center'; ctx.fillText('¡Gracias por tu compra! 💛', W / 2, y)
 
     const dataUrl = c.toDataURL('image/png')
-    // PNG para portapapeles (los navegadores copian PNG, no JPG)
-    try {
-      const blob = await new Promise((res) => c.toBlob(res, 'image/png'))
-      if (navigator.clipboard && window.ClipboardItem) {
-        await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })])
-        notify('📋 Liquidación copiada — pégala en WhatsApp (Ctrl+V)')
+    const descargar = () => {
+      const a = document.createElement('a')
+      a.href = dataUrl; a.download = `liquidacion_${cliente}_${fecha.replace(/\//g, '-')}.png`
+      document.body.appendChild(a); a.click(); a.remove()
+      notify('📥 Comprobante descargado')
+    }
+    // Intentar copiar al portapapeles preservando el gesto del clic
+    if (navigator.clipboard && window.ClipboardItem) {
+      try {
+        const item = new window.ClipboardItem({ 'image/png': (async () => (await fetch(dataUrl)).blob())() })
+        await navigator.clipboard.write([item])
+        notify('📋 Copiada — pégala en WhatsApp (Ctrl+V / mantén presionado → Pegar)')
+        return
+      } catch (e) {
+        descargar()
         return
       }
-      throw new Error('no-clipboard')
-    } catch (e) {
-      // Respaldo: descargar la imagen
-      try {
-        const a = document.createElement('a')
-        a.href = dataUrl; a.download = `liquidacion_${cliente}_${fecha.replace(/\//g, '-')}.png`
-        document.body.appendChild(a); a.click(); a.remove()
-        notify('📥 No se pudo copiar; se descargó la imagen')
-      } catch (er) {
-        const w = window.open(); if (w) w.document.write(`<img src="${dataUrl}" style="max-width:100%"/>`)
-        notify('Imagen abierta en pestaña; cópiala o guárdala desde ahí')
-      }
     }
+    descargar()
   }
 
   const cobrarCliente = async (grupo) => {
