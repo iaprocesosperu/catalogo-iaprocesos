@@ -1002,6 +1002,7 @@ export function HistorialScr(P) {
     const cliente = ventas[0].clientes?.nombre || 'Cliente'
     const fecha = new Date().toLocaleDateString('es-PE')
     const total = ventas.reduce((s, v) => s + v.total, 0)
+    try {
     // Canvas tipo ticket
     const W = 600, pad = 32, lineH = 46
     const H = 260 + ventas.length * lineH + 140
@@ -1062,11 +1063,13 @@ export function HistorialScr(P) {
         notify('📋 Copiada — pégala en WhatsApp (Ctrl+V / mantén presionado → Pegar)')
         return
       } catch (e) {
+        notify('No se pudo copiar (' + e.message + '), descargando...', 'error')
         descargar()
         return
       }
     }
     descargar()
+    } catch (err) { notify('Error generando: ' + err.message, 'error') }
   }
 
   const cobrarCliente = async (grupo) => {
