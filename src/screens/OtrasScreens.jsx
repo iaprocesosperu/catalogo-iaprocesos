@@ -1046,27 +1046,33 @@ export function HistorialScr(P) {
     y += 36
     ctx.fillStyle = '#C5A55A'; ctx.font = 'italic 16px Arial'; ctx.textAlign = 'center'; ctx.fillText('¡Gracias por tu compra! 💛', W / 2, y)
 
-    const descargar = (blob) => {
-      try {
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url; a.download = `liquidacion_${cliente}_${fecha.replace(/\//g, '-')}.jpg`
-        document.body.appendChild(a); a.click(); a.remove()
-        setTimeout(() => URL.revokeObjectURL(url), 2000)
-        notify('📥 Comprobante descargado')
-      } catch (er) { notify('Error al descargar: ' + er.message, 'error') }
+    const abrirEnPestana = (dataUrl) => {
+      const w = window.open()
+      if (w) { w.document.write(`<html><head><title>Comprobante ${cliente}</title></head><body style="margin:0;background:#333;text-align:center"><img src="${dataUrl}" style="max-width:100%"/></body></html>`); notify('Comprobante listo — mantén presionada la imagen para guardar o compartir') }
+      else { notify('Permite ventanas emergentes para ver el comprobante', 'error') }
     }
     try {
-      const blob = await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('No se pudo generar la imagen')), 'image/jpeg', 0.92))
+      const dataUrl = c.toDataURL('image/jpeg', 0.92)
+      const blob = await (await fetch(dataUrl)).blob()
       const file = new File([blob], 'liquidacion.jpg', { type: 'image/jpeg' })
-      const puedeCompartir = navigator.canShare && navigator.canShare({ files: [file] })
-      if (navigator.share && puedeCompartir) {
-        try { await navigator.share({ files: [file], title: 'Comprobante', text: `Compra de ${cliente} - S/${total.toFixed(2)}` }) }
-        catch (e) { if (e.name !== 'AbortError') descargar(blob) }
-      } else {
-        descargar(blob)
+      // 1) Intentar compartir nativo (celular)
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'Comprobante', text: `Compra de ${cliente} - S/${total.toFixed(2)}` })
+          return
+        } catch (e) { if (e.name === 'AbortError') return /* canceló */ }
       }
-    } catch (e) { notify('Error: ' + e.message, 'error') }
+      // 2) Intentar descarga (PC)
+      try {
+        const a = document.createElement('a')
+        a.href = dataUrl; a.download = `liquidacion_${cliente}_${fecha.replace(/\//g, '-')}.jpg`
+        document.body.appendChild(a); a.click(); a.remove()
+        notify('📥 Comprobante descargado')
+        return
+      } catch (e) {}
+      // 3) Fallback: abrir en pestaña
+      abrirEnPestana(dataUrl)
+    } catch (e) { notify('Error al generar: ' + e.message, 'error') }
   }
 
   const cobrarCliente = async (grupo) => {
