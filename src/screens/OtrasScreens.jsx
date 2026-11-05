@@ -857,7 +857,7 @@ export function StockScr(P) {
 
 /* ═══ HISTORIAL VENTAS ═══ */
 export function HistorialScr(P) {
-  const { tit, vents, clis, eid, lid, setScr, notify, loadAll } = P
+  const { tit, vents, clis, eid, lid, emp, setScr, notify, loadAll } = P
   const [tab, setTab] = useState('lista')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
