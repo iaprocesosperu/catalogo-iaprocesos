@@ -1046,33 +1046,28 @@ export function HistorialScr(P) {
     y += 36
     ctx.fillStyle = '#C5A55A'; ctx.font = 'italic 16px Arial'; ctx.textAlign = 'center'; ctx.fillText('¡Gracias por tu compra! 💛', W / 2, y)
 
-    const abrirEnPestana = (dataUrl) => {
-      const w = window.open()
-      if (w) { w.document.write(`<html><head><title>Comprobante ${cliente}</title></head><body style="margin:0;background:#333;text-align:center"><img src="${dataUrl}" style="max-width:100%"/></body></html>`); notify('Comprobante listo — mantén presionada la imagen para guardar o compartir') }
-      else { notify('Permite ventanas emergentes para ver el comprobante', 'error') }
-    }
+    const dataUrl = c.toDataURL('image/png')
+    // PNG para portapapeles (los navegadores copian PNG, no JPG)
     try {
-      const dataUrl = c.toDataURL('image/jpeg', 0.92)
-      const blob = await (await fetch(dataUrl)).blob()
-      const file = new File([blob], 'liquidacion.jpg', { type: 'image/jpeg' })
-      // 1) Intentar compartir nativo (celular)
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: 'Comprobante', text: `Compra de ${cliente} - S/${total.toFixed(2)}` })
-          return
-        } catch (e) { if (e.name === 'AbortError') return /* canceló */ }
+      const blob = await new Promise((res) => c.toBlob(res, 'image/png'))
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })])
+        notify('📋 Liquidación copiada — pégala en WhatsApp (Ctrl+V)')
+        return
       }
-      // 2) Intentar descarga (PC)
+      throw new Error('no-clipboard')
+    } catch (e) {
+      // Respaldo: descargar la imagen
       try {
         const a = document.createElement('a')
-        a.href = dataUrl; a.download = `liquidacion_${cliente}_${fecha.replace(/\//g, '-')}.jpg`
+        a.href = dataUrl; a.download = `liquidacion_${cliente}_${fecha.replace(/\//g, '-')}.png`
         document.body.appendChild(a); a.click(); a.remove()
-        notify('📥 Comprobante descargado')
-        return
-      } catch (e) {}
-      // 3) Fallback: abrir en pestaña
-      abrirEnPestana(dataUrl)
-    } catch (e) { notify('Error al generar: ' + e.message, 'error') }
+        notify('📥 No se pudo copiar; se descargó la imagen')
+      } catch (er) {
+        const w = window.open(); if (w) w.document.write(`<img src="${dataUrl}" style="max-width:100%"/>`)
+        notify('Imagen abierta en pestaña; cópiala o guárdala desde ahí')
+      }
+    }
   }
 
   const cobrarCliente = async (grupo) => {
@@ -1331,7 +1326,7 @@ export function HistorialScr(P) {
 
         {modoSelV && selV.length > 0 && (
           <div style={{ position: 'fixed', bottom: 80, left: 0, right: 0, background: '#fff', borderTop: '1px solid ' + G.border, padding: 12, boxShadow: '0 -2px 12px rgba(0,0,0,0.12)', zIndex: 60 }}>
-            <button onClick={enviarLiquidacion} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: '#25D366', color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>📤 Enviar liquidación ({selV.length})</button>
+            <button onClick={enviarLiquidacion} style={{ width: '100%', padding: 14, borderRadius: 10, border: 'none', background: '#25D366', color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>📋 Copiar liquidación ({selV.length})</button>
           </div>
         )}
       </div>
