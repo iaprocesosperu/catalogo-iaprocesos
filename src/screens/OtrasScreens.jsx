@@ -335,6 +335,63 @@ export function OrigenesScr(P) {
   const formRef = useRef(null)
   const s = (k, v) => setF(p => ({ ...p, [k]: v }))
   const invCalc = parseFloat(f.cantidad || 0) * parseFloat(f.precio_costo_defecto || 0)
+  // ── Subida masiva de orígenes por Excel ──
+  const [bulk, setBulk] = useState(null) // { filas:[{nombre,cantidad,costo,venta}], proveedor_id:'' }
+  const [bulkGuardando, setBulkGuardando] = useState(false)
+  const fileRef = useRef(null)
+  const leerExcel = async (file) => {
+    try {
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: 'buffer' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      // Detectar fila de encabezado (busca "nombre")
+      let hi = rows.findIndex(r => r.some(c => String(c).toLowerCase().trim() === 'nombre'))
+      if (hi < 0) hi = 0
+      const head = rows[hi].map(c => String(c).toLowerCase().trim())
+      const iN = head.indexOf('nombre')
+      const iC = head.findIndex(c => c === 'cantidad' || c === 'cant')
+      const iCo = head.findIndex(c => c === 'costo' || c === 'precio' || c === 'precio_costo')
+      const iV = head.findIndex(c => c === 'precio_venta' || c === 'venta' || c === 'precio de venta')
+      const filas = []
+      for (let r = hi + 1; r < rows.length; r++) {
+        const row = rows[r]
+        const nombre = iN >= 0 ? String(row[iN] || '').trim() : ''
+        if (!nombre) continue
+        filas.push({
+          nombre,
+          cantidad: iC >= 0 ? (parseInt(row[iC]) || 0) : 0,
+          costo: iCo >= 0 && row[iCo] !== '' ? parseFloat(row[iCo]) : '',
+          venta: iV >= 0 && row[iV] !== '' ? parseFloat(row[iV]) : ''
+        })
+      }
+      if (!filas.length) { notify('No se encontraron filas con nombre en el Excel', 'error'); return }
+      setBulk({ filas, proveedor_id: '' })
+    } catch (e) { notify('Error leyendo Excel: ' + e.message, 'error') }
+    if (fileRef.current) fileRef.current.value = ''
+  }
+  const bulkSet = (i, k, v) => setBulk(b => ({ ...b, filas: b.filas.map((x, j) => j === i ? { ...x, [k]: v } : x) }))
+  const bulkQuitar = (i) => setBulk(b => ({ ...b, filas: b.filas.filter((_, j) => j !== i) }))
+  const guardarBulk = async () => {
+    if (!bulk || !bulk.filas.length) return
+    setBulkGuardando(true)
+    try {
+      const prov = bulk.proveedor_id !== '' ? parseInt(bulk.proveedor_id) : null
+      const payload = bulk.filas.filter(x => x.nombre.trim()).map(x => ({
+        empresa_id: eid, linea_id: lid, nombre: x.nombre.trim(),
+        cantidad: parseInt(x.cantidad) || 0,
+        precio_costo_defecto: x.costo !== '' ? parseFloat(x.costo) : null,
+        precio_venta_defecto: x.venta !== '' ? parseFloat(x.venta) : null,
+        proveedor_id: prov, estado: 'activo'
+      }))
+      if (!payload.length) { notify('Nada que guardar', 'error'); setBulkGuardando(false); return }
+      const { error } = await supabase.from('origenes').insert(payload)
+      if (error) throw error
+      notify(`✅ ${payload.length} orígenes creados`)
+      setBulk(null); await loadAll()
+    } catch (e) { notify('Error guardando: ' + e.message, 'error') }
+    setBulkGuardando(false)
+  }
 
   useEffect(() => {
     const cargarUsados = async () => {
@@ -441,6 +498,47 @@ export function OrigenesScr(P) {
           style={{ width: '100%', padding: 12, borderRadius: 8, border: '2px dashed ' + G.gold, background: G.goldLt, cursor: 'pointer', color: G.gold, fontWeight: 700, fontSize: 13, marginBottom: 12 }}>
           ➕ Nuevo origen
         </button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={e => { if (e.target.files[0]) leerExcel(e.target.files[0]) }} />
+        <button onClick={() => fileRef.current?.click()}
+          style={{ width: '100%', padding: 12, borderRadius: 8, border: '2px dashed ' + G.goldDk, background: '#fff', cursor: 'pointer', color: G.goldDk, fontWeight: 700, fontSize: 13, marginBottom: 12 }}>
+          📤 Subir orígenes desde Excel
+        </button>
+        {bulk && (
+          <Crd title={`Vista previa — ${bulk.filas.length} orígenes a crear`}>
+            <label style={{ fontSize: 11, color: G.muted }}>Proveedor (se aplica a todos)</label>
+            <select value={bulk.proveedor_id} onChange={e => setBulk(b => ({ ...b, proveedor_id: e.target.value }))} style={iS(G)}>
+              <option value="">Sin proveedor</option>
+              {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            </select>
+            <div style={{ fontSize: 10, color: G.muted, margin: '2px 0 8px' }}>Línea actual: <b>{tit}</b> · Puedes editar costo y precio de venta antes de guardar.</div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead><tr style={{ background: G.goldLt }}>
+                  <th style={{ textAlign: 'left', padding: 6 }}>Nombre</th>
+                  <th style={{ width: 55, padding: 6 }}>Cant.</th>
+                  <th style={{ width: 70, padding: 6 }}>Costo</th>
+                  <th style={{ width: 70, padding: 6 }}>Venta</th>
+                  <th style={{ width: 30 }}></th>
+                </tr></thead>
+                <tbody>
+                  {bulk.filas.map((x, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: 4 }}><input value={x.nombre} onChange={e => bulkSet(i, 'nombre', e.target.value)} style={{ ...iS(G), margin: 0, padding: 6 }} /></td>
+                      <td style={{ padding: 4 }}><input value={x.cantidad} onChange={e => bulkSet(i, 'cantidad', e.target.value)} type="number" style={{ ...iS(G), margin: 0, padding: 6, textAlign: 'center' }} /></td>
+                      <td style={{ padding: 4 }}><input value={x.costo} onChange={e => bulkSet(i, 'costo', e.target.value)} type="number" placeholder="—" style={{ ...iS(G), margin: 0, padding: 6, textAlign: 'center' }} /></td>
+                      <td style={{ padding: 4 }}><input value={x.venta} onChange={e => bulkSet(i, 'venta', e.target.value)} type="number" placeholder="—" style={{ ...iS(G), margin: 0, padding: 6, textAlign: 'center' }} /></td>
+                      <td style={{ textAlign: 'center' }}><button onClick={() => bulkQuitar(i)} style={{ background: 'none', border: 'none', color: '#c00', cursor: 'pointer', fontSize: 16 }}>✕</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button onClick={() => setBulk(null)} disabled={bulkGuardando} style={{ flex: 1, padding: 12, borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontWeight: 700 }}>Cancelar</button>
+              <button onClick={guardarBulk} disabled={bulkGuardando} style={{ flex: 2, padding: 12, borderRadius: 8, border: 'none', background: G.gold, color: '#fff', cursor: 'pointer', fontWeight: 700 }}>{bulkGuardando ? 'Guardando…' : `✅ Crear ${bulk.filas.length} orígenes`}</button>
+            </div>
+          </Crd>
+        )}
         {showAdd && (
           <div ref={formRef}>
             <Crd title={editId ? 'Editar origen' : 'Nuevo origen'}>
