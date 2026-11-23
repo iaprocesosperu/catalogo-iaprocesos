@@ -29,6 +29,7 @@ export default function CatalogoScreen(P) {
   const [f, setF] = useState('')
   const [fOrigen, setFOrigen] = useState('')
   const [viewerProd, setViewerProd] = useState(null)
+  const [fotoCarrito, setFotoCarrito] = useState(null) // índice del item que se está viendo (solo ver fotos)
   const [ocultarAgotados, setOcultarAgotados] = useState(true)
   const [verOcultos, setVerOcultos] = useState(false)
   const [verGenericos, setVerGenericos] = useState(false)
@@ -554,6 +555,35 @@ export default function CatalogoScreen(P) {
   return (
     <div>
       {viewerProd && <PhotoViewerModal prod={viewerProd} emp={emp} notify={notify} loadAll={loadAll} onClose={() => setViewerProd(null)} />}
+
+      {/* Visor de SOLO VER fotos del carrito (foto principal, con flechas) */}
+      {fotoCarrito !== null && carItems[fotoCarrito] && (() => {
+        const it = carItems[fotoCarrito]
+        const prodF = (allProds || prods || []).find(p => p.id === it.producto_id || p.codigo === it.codigo)
+        const foto = prodF?.foto_url || null
+        const irA = (d) => { const n = fotoCarrito + d; if (n >= 0 && n < carItems.length) setFotoCarrito(n) }
+        return (
+          <div onClick={() => setFotoCarrito(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: 700 }}>{fotoCarrito + 1} / {carItems.length}</span>
+                <button onClick={() => setFotoCarrito(null)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, width: 34, height: 34, color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
+              </div>
+              <div style={{ width: '100%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
+                <button onClick={() => irA(-1)} disabled={fotoCarrito === 0} style={{ position: 'absolute', left: 0, background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 24, width: 42, height: 42, color: '#fff', fontSize: 22, cursor: fotoCarrito === 0 ? 'default' : 'pointer', opacity: fotoCarrito === 0 ? 0.3 : 1, zIndex: 2 }}>‹</button>
+                {foto
+                  ? <img src={foto} alt={it.nombre} style={{ maxWidth: '100%', maxHeight: '65vh', objectFit: 'contain', borderRadius: 12 }} />
+                  : <div style={{ width: 220, height: 220, background: 'rgba(255,255,255,0.1)', borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}><span style={{ fontSize: 48, opacity: 0.4 }}>📦</span><span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>Sin foto</span></div>}
+                <button onClick={() => irA(1)} disabled={fotoCarrito === carItems.length - 1} style={{ position: 'absolute', right: 0, background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 24, width: 42, height: 42, color: '#fff', fontSize: 22, cursor: fotoCarrito === carItems.length - 1 ? 'default' : 'pointer', opacity: fotoCarrito === carItems.length - 1 ? 0.3 : 1, zIndex: 2 }}>›</button>
+              </div>
+              <div style={{ marginTop: 14, textAlign: 'center' }}>
+                <p style={{ color: '#fff', fontSize: 16, fontWeight: 700, margin: 0 }}>{it.nombre}</p>
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, margin: '2px 0 0' }}>{it.codigo} • S/{it.precio_unit}</p>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
       <div style={{ position: 'sticky', top: 0, zIndex: 40 }}>
       <div style={{ background: G.gold, padding: '16px 16px 12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -788,10 +818,10 @@ export default function CatalogoScreen(P) {
                   {/* Items */}
                   {carItems.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 24, color: G.muted, fontSize: 13 }}>Carrito vacío. Agrega prendas desde el catálogo con el botón 🛒</div>
-                  ) : carItems.map(it => (
+                  ) : carItems.map((it, idx) => (
                     <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid ' + G.border }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 12, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.nombre}</p>
+                        <p onClick={() => setFotoCarrito(idx)} style={{ fontSize: 12, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: G.gold, textDecoration: 'underline', cursor: 'pointer' }}>{it.nombre}</p>
                         <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{it.codigo}</p>
                       </div>
                       <CartNumInput value={it.cantidad} width={44} align="center" min={0} onCommit={val => setItemCant(it, val)} />
