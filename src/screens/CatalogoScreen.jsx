@@ -25,7 +25,14 @@ function CartNumInput({ value, onCommit, width, align, min }) {
 }
 
 export default function CatalogoScreen(P) {
-  const { tit, lineas, linAct, setLinAct, prods, allProds, oris, cats, eid, lid, setScr, setEditP, setVentaP, logout, notify, loadAll, emp, setRetorno } = P
+  const { tit, lineas, linAct, setLinAct, prods, allProds, oris, cats, eid, lid, setScr, setEditP, setVentaP, logout, notify, loadAll, emp, setRetorno, vents } = P
+  // Productos con venta en las últimas 48h (para avisar en el carrito si se repite)
+  const vendidosReciente = (() => {
+    const lim = Date.now() - 48 * 3600 * 1000
+    const s = new Set()
+    ;(vents || []).forEach(v => { if (!v.anulada && v.producto_id && new Date(v.created_at).getTime() >= lim) s.add(v.producto_id) })
+    return s
+  })()
   const [f, setF] = useState('')
   const [fOrigen, setFOrigen] = useState('')
   const [viewerProd, setViewerProd] = useState(null)
@@ -141,8 +148,34 @@ export default function CatalogoScreen(P) {
   }
   const cerrarCarritoVacio = async (cid) => {
     if (!confirm('¿Descartar este carrito?')) return
+    await supabase.from('carrito_items').delete().eq('carrito_id', cid)
     await supabase.from('carritos').delete().eq('id', cid)
+    if (carActivo === cid) { setCarActivo(null); setCarItems([]) }
     await cargarCarritos()
+  }
+  // Borra un carrito desde su pestaña (pregunta distinto si tiene prendas)
+  const descartarCarritoTab = async (c, e) => {
+    if (e) e.stopPropagation()
+    const { count } = await supabase.from('carrito_items').select('id', { count: 'exact', head: true }).eq('carrito_id', c.id)
+    const nom = c.clientes?.nombre || c.nombre || 'Carrito'
+    const msg = count ? `El carrito "${nom}" tiene ${count} prenda(s). ¿Descartarlo igual? (no se registra venta)` : `¿Descartar el carrito "${nom}"?`
+    if (!confirm(msg)) return
+    await supabase.from('carrito_items').delete().eq('carrito_id', c.id)
+    await supabase.from('carritos').delete().eq('id', c.id)
+    if (carActivo === c.id) { setCarActivo(null); setCarItems([]) }
+    await cargarCarritos()
+  }
+  // Limpia de un golpe todos los carritos sin prendas
+  const limpiarCarritosVacios = async () => {
+    const { data: cs } = await supabase.from('carritos').select('id').eq('empresa_id', eid).eq('estado', 'abierto')
+    if (!cs || !cs.length) { notify('No hay carritos'); return }
+    let borrados = 0
+    for (const c of cs) {
+      const { count } = await supabase.from('carrito_items').select('id', { count: 'exact', head: true }).eq('carrito_id', c.id)
+      if (!count) { await supabase.from('carritos').delete().eq('id', c.id); borrados++ }
+    }
+    notify(borrados ? `🧹 ${borrados} carrito(s) vacío(s) eliminado(s)` : 'No había carritos vacíos')
+    setCarActivo(null); await cargarCarritos()
   }
 
   const agregarAlCarrito = async (p, precioUnit) => {
@@ -218,10 +251,13 @@ export default function CatalogoScreen(P) {
           }
         }
       }
-      // 3) cerrar carrito
+      // 3) VACIAR y eliminar el carrito para que NO se pueda re-liquidar (anti-duplicado)
+      await supabase.from('carrito_items').delete().eq('carrito_id', carActivo)
       await supabase.from('carritos').update({ estado: 'liquidado' }).eq('id', carActivo)
+      await supabase.from('carritos').delete().eq('id', carActivo)
       notify(`✅ Carrito liquidado: S/${totalCarrito.toFixed(2)} (${liqMetodo})`)
       setLiqOpen(false); setLiqFecha(''); setLiqMetodo('Efectivo')
+      setCarActivo(null); setCarItems([])
       await cargarCarritos(); await loadAll()
     } catch (e) { notify('Error: ' + e.message, 'error') }
     setCarLiq(false)
@@ -790,11 +826,15 @@ export default function CatalogoScreen(P) {
               {/* Pestañas de carritos */}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
                 {carritos.map(c => (
-                  <button key={c.id} onClick={() => setCarActivo(c.id)} style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid ' + (carActivo === c.id ? '#059669' : G.border), background: carActivo === c.id ? '#059669' : '#fff', color: carActivo === c.id ? '#fff' : G.text, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                    {carActivo === c.id ? '⭐ ' : ''}{c.clientes?.nombre || c.nombre || 'Carrito'}
-                  </button>
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'stretch', borderRadius: 10, overflow: 'hidden', border: '1px solid ' + (carActivo === c.id ? '#059669' : G.border) }}>
+                    <button onClick={() => setCarActivo(c.id)} style={{ padding: '7px 10px', border: 'none', background: carActivo === c.id ? '#059669' : '#fff', color: carActivo === c.id ? '#fff' : G.text, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      {carActivo === c.id ? '⭐ ' : ''}{c.clientes?.nombre || c.nombre || 'Carrito'}
+                    </button>
+                    <button onClick={(e) => descartarCarritoTab(c, e)} title="Descartar este carrito" style={{ padding: '0 8px', border: 'none', borderLeft: '1px solid ' + (carActivo === c.id ? 'rgba(255,255,255,0.4)' : G.border), background: carActivo === c.id ? '#059669' : '#fff', color: carActivo === c.id ? '#fff' : G.err, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>✕</button>
+                  </div>
                 ))}
                 <button onClick={nuevoCarrito} style={{ padding: '7px 12px', borderRadius: 10, border: '1px dashed ' + G.gold, background: '#fff', color: G.gold, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>+ Nuevo</button>
+                {carritos.length > 1 && <button onClick={limpiarCarritosVacios} title="Eliminar todos los carritos sin prendas" style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid ' + G.border, background: '#FEF2F2', color: G.err, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>🧹 Limpiar vacíos</button>}
               </div>
 
               {!carActivo ? (
@@ -822,7 +862,7 @@ export default function CatalogoScreen(P) {
                     <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid ' + G.border }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p onClick={() => setFotoCarrito(idx)} style={{ fontSize: 12, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: G.gold, textDecoration: 'underline', cursor: 'pointer' }}>{it.nombre}</p>
-                        <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{it.codigo}</p>
+                        <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{it.codigo}{it.producto_id && vendidosReciente.has(it.producto_id) ? <span title="Este producto ya tiene una venta reciente (últimas 48h). Revisa que no sea duplicado." style={{ color: '#B91C1C', fontWeight: 700, marginLeft: 6 }}>⚠️ ya vendido</span> : ''}</p>
                       </div>
                       <CartNumInput value={it.cantidad} width={44} align="center" min={0} onCommit={val => setItemCant(it, val)} />
                       <span style={{ fontSize: 11, color: G.muted }}>×</span>

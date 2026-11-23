@@ -321,6 +321,8 @@ function OrigenDetalle({ origen, eid, onClose }) {
 export function OrigenesScr(P) {
   const { eid, lid, tit, oris, notify, loadAll, setScr, origenEdit, setOrigenEdit, retorno, setRetorno } = P
   const [showAdd, setShowAdd] = useState(false)
+  const [buscarOri, setBuscarOri] = useState('')
+  const [filProvOri, setFilProvOri] = useState('')
   const [f, setF] = useState({ nombre: '', cantidad: '', precio_costo_defecto: '', precio_venta_defecto: '', fecha: '', observaciones: '', es_granel: false, unidad_base: 'kg', proveedor_id: '' })
   const [editId, setEditId] = useState(null)
   const [detalleOrigen, setDetalleOrigen] = useState(null)
@@ -472,9 +474,16 @@ export function OrigenesScr(P) {
   }
 
   const eliminar = async id => { if (!confirm('¿Eliminar?')) return; await supabase.from('origenes').update({ activo: false }).eq('id', id); notify('Eliminado'); await loadAll() }
-  const totalInv = oris.reduce((s, o) => s + (o.cantidad || 0) * (o.precio_costo_defecto || 0), 0)
-  const totalItems = oris.reduce((s, o) => s + (o.cantidad || 0), 0)
-  const totalVenta = oris.reduce((s, o) => s + (o.cantidad || 0) * (o.precio_venta_defecto || 0), 0)
+  // Filtros
+  const orisF = oris.filter(o => {
+    if (buscarOri && !((o.nombre || '').toLowerCase().includes(buscarOri.toLowerCase()))) return false
+    if (filProvOri === 'sin' && o.proveedor_id) return false
+    if (filProvOri !== '' && filProvOri !== 'sin' && String(o.proveedor_id) !== String(filProvOri)) return false
+    return true
+  })
+  const totalInv = orisF.reduce((s, o) => s + (o.cantidad || 0) * (o.precio_costo_defecto || 0), 0)
+  const totalItems = orisF.reduce((s, o) => s + (o.cantidad || 0), 0)
+  const totalVenta = orisF.reduce((s, o) => s + (o.cantidad || 0) * (o.precio_venta_defecto || 0), 0)
 
   if (detalleOrigen) return <OrigenDetalle origen={detalleOrigen} eid={eid} onClose={() => setDetalleOrigen(null)} />
 
@@ -591,7 +600,19 @@ export function OrigenesScr(P) {
             </Crd>
           </div>
         )}
-        {oris.map(o => {
+        {/* Buscador + filtro por proveedor */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+          <input value={buscarOri} onChange={e => setBuscarOri(e.target.value)} placeholder="🔍 Buscar origen..." style={{ flex: 2, minWidth: 140, padding: '9px 12px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} />
+          <select value={filProvOri} onChange={e => setFilProvOri(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}>
+            <option value="">Todos los proveedores</option>
+            {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            <option value="sin">Sin proveedor</option>
+          </select>
+          {(buscarOri || filProvOri) && <button onClick={() => { setBuscarOri(''); setFilProvOri('') }} style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid ' + G.border, background: '#fff', color: G.muted, fontSize: 12, cursor: 'pointer' }}>✕ Limpiar</button>}
+        </div>
+        {(buscarOri || filProvOri) && <p style={{ fontSize: 11, color: G.muted, margin: '0 0 8px' }}>{orisF.length} de {oris.length} orígenes</p>}
+        {orisF.length === 0 && <p style={{ textAlign: 'center', color: G.muted, fontSize: 13, padding: 20 }}>No hay orígenes con ese filtro</p>}
+        {orisF.map(o => {
           const usadosCount = usados[o.id] || 0
           const pct = o.cantidad > 0 ? usadosCount / o.cantidad : null
           return (
@@ -955,7 +976,7 @@ export function StockScr(P) {
 
 /* ═══ HISTORIAL VENTAS ═══ */
 export function HistorialScr(P) {
-  const { tit, vents, clis, eid, lid, emp, orisAll, setScr, notify, loadAll } = P
+  const { tit, vents, clis, eid, lid, emp, orisAll, allProds, setScr, notify, loadAll } = P
   const [tab, setTab] = useState('lista')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
@@ -982,7 +1003,7 @@ export function HistorialScr(P) {
 
   const abrirEdit = (v) => {
     setEditV(v)
-    setEf({ cantidad: String(v.cantidad), precio_venta_real: String(v.precio_venta_real), precio_costo: v.precio_costo != null ? String(v.precio_costo) : '', cliente_id: v.cliente_id || '', metodo_pago: v.metodo_pago || '', tipo_entrega: v.tipo_entrega || '', nota: v.nota || '', costo_devuelto: !!v.costo_devuelto, fecha: v.created_at ? v.created_at.slice(0, 10) : '', origen_id: v.origen_id != null ? String(v.origen_id) : '' })
+    setEf({ cantidad: String(v.cantidad), precio_venta_real: String(v.precio_venta_real), precio_costo: v.precio_costo != null ? String(v.precio_costo) : '', cliente_id: v.cliente_id || '', metodo_pago: v.metodo_pago || '', tipo_entrega: v.tipo_entrega || '', nota: v.nota || '', costo_devuelto: !!v.costo_devuelto, fecha: v.created_at ? v.created_at.slice(0, 10) : '', origen_id: v.origen_id != null ? String(v.origen_id) : '', reasignar_producto_id: '', buscarProd: '' })
   }
 
   const guardarEdit = async () => {
@@ -997,6 +1018,43 @@ export function HistorialScr(P) {
       const esGenerica = !!editV.productos?.es_generico
       const nuevoOri = ef.origen_id !== '' ? parseInt(ef.origen_id) : null
       const oriAnterior = editV.origen_id != null ? parseInt(editV.origen_id) : null
+
+      // ─── REASIGNAR a producto real (solo ventas genéricas) ───
+      const reasignarId = ef.reasignar_producto_id !== '' ? parseInt(ef.reasignar_producto_id) : null
+      if (reasignarId && reasignarId !== editV.producto_id) {
+        const prodReal = (allProds || []).find(p => p.id === reasignarId)
+        if (!prodReal) { notify('Producto no encontrado', 'error'); setGuardandoV(false); return }
+        // 1) Devolver lo que la venta descontaba antes
+        if (esGenerica && oriAnterior) {
+          const { data: oa } = await supabase.from('origenes').select('cantidad').eq('id', oriAnterior).single()
+          if (oa) await supabase.from('origenes').update({ cantidad: (oa.cantidad || 0) + editV.cantidad }).eq('id', oriAnterior)
+        } else if (!esGenerica && editV.producto_id) {
+          const { data: pOld } = await supabase.from('productos').select('cantidad').eq('id', editV.producto_id).single()
+          if (pOld) await supabase.from('productos').update({ cantidad: (pOld.cantidad || 0) + editV.cantidad }).eq('id', editV.producto_id)
+        }
+        // 2) Descontar del producto real la nueva cantidad
+        await supabase.from('productos').update({ cantidad: (prodReal.cantidad || 0) - nuevaCant }).eq('id', reasignarId)
+        // 3) Reasignar la venta al producto real (deja de ser genérica, sin origen)
+        await supabase.from('ventas').update({
+          producto_id: reasignarId,
+          codigo_producto: prodReal.codigo,
+          nombre_producto: prodReal.nombre,
+          origen_id: prodReal.origen_id || null,
+          proveedor_id: prodReal.proveedor_id || null,
+          cantidad: nuevaCant,
+          precio_venta_real: nuevoPV,
+          precio_costo: ef.precio_costo !== '' ? parseFloat(ef.precio_costo) : (prodReal.precio_costo || 0),
+          total: nuevoPV * nuevaCant,
+          cliente_id: ef.cliente_id || null,
+          metodo_pago: ef.metodo_pago || null,
+          tipo_entrega: ef.tipo_entrega || null,
+          nota: ef.nota || null,
+          costo_devuelto: ef.costo_devuelto,
+          ...(ef.fecha ? { created_at: new Date(ef.fecha + 'T12:00:00').toISOString() } : {})
+        }).eq('id', editV.id)
+        notify('✅ Venta reasignada a ' + prodReal.nombre)
+        setEditV(null); await loadAll(); setGuardandoV(false); return
+      }
 
       if (esGenerica) {
         // VENTA GENÉRICA (rápida): el stock vive en el ORIGEN (cantidad). Nunca toca stock de producto.
@@ -1509,6 +1567,23 @@ export function HistorialScr(P) {
                       {(orisAll || []).map(o => <option key={o.id} value={o.id}>{o.nombre} (quedan {o.cantidad ?? 0})</option>)}
                     </select>
                     <p style={{ fontSize: 10, color: G.muted, margin: '4px 0 0' }}>Solo venta rápida. Al guardar, descuenta la cantidad de este origen (y devuelve al anterior si lo cambias).</p>
+                  </div>
+                )}
+                {editV.productos?.es_generico && (
+                  <div style={{ marginTop: 8, background: '#EEF2FF', border: '1px dashed #6366F1', borderRadius: 8, padding: 8 }}>
+                    <label style={{ fontSize: 11, color: '#4338CA', fontWeight: 700 }}>🔗 Reasignar a producto real del catálogo</label>
+                    <input value={ef.buscarProd} onChange={e => setEf(s => ({ ...s, buscarProd: e.target.value, reasignar_producto_id: '' }))} placeholder="Buscar por código o nombre..." style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, marginTop: 4, boxSizing: 'border-box' }} />
+                    {ef.buscarProd && ef.buscarProd.length >= 2 && !ef.reasignar_producto_id && (
+                      <div style={{ maxHeight: 160, overflowY: 'auto', border: '1px solid ' + G.border, borderRadius: 8, marginTop: 4, background: '#fff' }}>
+                        {(allProds || []).filter(p => !p.es_generico && ((p.nombre || '').toLowerCase().includes(ef.buscarProd.toLowerCase()) || (p.codigo || '').toLowerCase().includes(ef.buscarProd.toLowerCase()))).slice(0, 15).map(p => (
+                          <div key={p.id} onClick={() => setEf(s => ({ ...s, reasignar_producto_id: String(p.id), buscarProd: p.codigo + ' · ' + p.nombre }))} style={{ padding: '7px 10px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', fontSize: 12 }}>
+                            <b>{p.codigo}</b> · {p.nombre} <span style={{ color: G.muted }}>(stock {p.cantidad ?? 0})</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {ef.reasignar_producto_id && <p style={{ fontSize: 11, color: '#059669', fontWeight: 700, margin: '6px 0 0' }}>✓ Se reasignará a: {ef.buscarProd} · <span onClick={() => setEf(s => ({ ...s, reasignar_producto_id: '', buscarProd: '' }))} style={{ color: G.err, cursor: 'pointer', textDecoration: 'underline' }}>quitar</span></p>}
+                    <p style={{ fontSize: 10, color: G.muted, margin: '4px 0 0' }}>Liga esta venta a la prenda real: descuenta su stock y devuelve lo del origen. Ya no será genérica.</p>
                   </div>
                 )}
                 <p style={{ fontSize: 10, color: G.warn, margin: '4px 0 10px' }}>⚠️ Cambiar la cantidad ajusta el stock. El costo afecta la ganancia.</p>
