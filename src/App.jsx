@@ -111,7 +111,7 @@ export default function App() {
       supabase.from('colores').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
       supabase.from('productos').select('*,categorias(nombre),origenes(nombre),lineas(nombre),secciones(nombre)').eq('empresa_id', id).eq('activo', true).order('created_at', { ascending: false }),
       supabase.from('clientes').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
-      supabase.from('ventas').select('*,clientes(nombre),proveedores(nombre),origenes(nombre),productos(foto_url)').eq('empresa_id', id).order('created_at', { ascending: false }),
+      supabase.from('ventas').select('*,clientes(nombre),proveedores(nombre),origenes(nombre),productos(foto_url,es_generico)').eq('empresa_id', id).order('created_at', { ascending: false }),
       supabase.from('listas_tallas').select('*').eq('activo', true).order('nombre'),
       supabase.from('secciones').select('*').eq('empresa_id', id).eq('activo', true).order('nombre'),
       supabase.from('pedidos').select('*').eq('empresa_id', id).order('created_at', { ascending: false })
@@ -127,7 +127,7 @@ export default function App() {
   const eid = emp?.id, lid = linAct?.id
   const tit = `${emp?.nombre || ''} › ${linAct?.nombre || ''}`
   const cF = cats.filter(c => c.linea_id === lid), oF = oris.filter(o => o.linea_id === lid), pF = prods.filter(p => p.linea_id === lid)
-  const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, cols, prods: pF, allProds: prods, clis, vents, listaTallas, secciones, pedidos, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G, isMobile, retorno, setRetorno, origenEdit, setOrigenEdit }
+  const P = { emp, eid, lid, tit, lineas, linAct, setLinAct, cats: cF, oris: oF, orisAll: oris, cols, prods: pF, allProds: prods, clis, vents, listaTallas, secciones, pedidos, notify, loadAll, scr, setScr, setEditP, setVentaP, logout, G, isMobile, retorno, setRetorno, origenEdit, setOrigenEdit }
 
   // Rutas públicas por URL
   if (window.location.pathname.startsWith('/comprar/')) return <PublicProductPage />

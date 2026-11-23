@@ -5,6 +5,25 @@ import { downloadPhoto, exportCSV, detectColor } from '../helpers'
 import { LineSel } from '../components/index'
 import PhotoViewerModal from '../components/PhotoViewerModal'
 
+// Input de carrito con edición local: escribes libre y recién guarda al salir (onBlur/Enter)
+function CartNumInput({ value, onCommit, width, align, min }) {
+  const [v, setV] = useState(String(value))
+  useEffect(() => { setV(String(value)) }, [value])
+  const commit = () => { if (v !== String(value)) onCommit(v) }
+  return (
+    <input
+      type="number"
+      value={v}
+      onChange={e => setV(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
+      onFocus={e => e.target.select()}
+      min={min}
+      style={{ width, padding: '5px', borderRadius: 6, border: '1px solid ' + G.border, fontSize: 12, textAlign: align || 'center', boxSizing: 'border-box' }}
+    />
+  )
+}
+
 export default function CatalogoScreen(P) {
   const { tit, lineas, linAct, setLinAct, prods, allProds, oris, cats, eid, lid, setScr, setEditP, setVentaP, logout, notify, loadAll, emp, setRetorno } = P
   const [f, setF] = useState('')
@@ -142,7 +161,8 @@ export default function CatalogoScreen(P) {
       await supabase.from('carrito_items').insert({ carrito_id: cid, producto_id: p.id, codigo: p.codigo, nombre: p.nombre, precio_costo: p.precio_costo || 0, precio_unit: precioUnit ?? p.precio_venta, cantidad: 1, origen_id: p.origen_id || null, proveedor_id: provId })
     }
     await cargarItems(cid); await cargarCarritos()
-    notify('🛒 ' + p.nombre + ' al carrito')
+    const caDest = carritos.find(c => c.id === cid); const nomDest = caDest ? (caDest.clientes?.nombre || caDest.nombre) : null
+    notify('🛒 ' + p.nombre + (nomDest ? ' → ' + nomDest : ' al carrito'))
   }
 
   const setItemCant = async (item, cant) => {
@@ -179,7 +199,13 @@ export default function CatalogoScreen(P) {
           created_at: fechaVenta
         })
         // 2) descontar stock
-        if (it.producto_id) {
+        if (it.es_generico) {
+          // Venta rápida/genérica: descuenta del ORIGEN (lote), NO del producto. Nunca toca stock de producto.
+          if (it.origen_id) {
+            const { data: og } = await supabase.from('origenes').select('cantidad').eq('id', it.origen_id).single()
+            if (og) await supabase.from('origenes').update({ cantidad: (og.cantidad || 0) - it.cantidad }).eq('id', it.origen_id)
+          }
+        } else if (it.producto_id) {
           const { data: prod } = await supabase.from('productos').select('cantidad, equivalente_granel, origen_id').eq('id', it.producto_id).single()
           if (prod) {
             if (prod.equivalente_granel && prod.origen_id) {
@@ -221,7 +247,8 @@ export default function CatalogoScreen(P) {
       const nums = (cods || []).map(p => parseInt(p.codigo)).filter(n => !isNaN(n))
       const codigo = String(nums.length ? Math.max(...nums) + 1 : 1).padStart(3, '0')
       const costo = vr.costo !== '' ? parseFloat(vr.costo) : 0
-      const stockCrear = vr.stock_extra !== '' ? (parseInt(vr.stock_extra) || 0) : cantVender
+      // Venta rápida NO genera stock: el producto genérico nace en 0 (o lo que pongas en "Stock a crear")
+      const stockCrear = vr.stock_extra !== '' ? (parseInt(vr.stock_extra) || 0) : 0
       let foto_url = null
       if (vrFoto?.blob) { const comp = await comprimirImagen(new File([vrFoto.blob], 'vr.jpg', { type: vrFoto.blob.type || 'image/jpeg' })); foto_url = await subirFoto(comp, codigo + '_' + Date.now()) }
       const { data: prod, error: e1 } = await supabase.from('productos').insert({
@@ -236,7 +263,7 @@ export default function CatalogoScreen(P) {
       if (!provId && vr.origen_id) { const { data: og } = await supabase.from('origenes').select('proveedor_id').eq('id', vr.origen_id).single(); provId = og?.proveedor_id || null }
       let cid = carActivo
       if (!cid) { const { data: nc } = await supabase.from('carritos').insert({ empresa_id: eid, estado: 'abierto', nombre: 'Carrito 1' }).select().single(); cid = nc.id; setCarActivo(cid) }
-      await supabase.from('carrito_items').insert({ carrito_id: cid, producto_id: prod.id, codigo, nombre: vr.nombre.trim(), precio_costo: costo, precio_unit: precio, cantidad: cantVender, origen_id: vr.origen_id || null, proveedor_id: provId })
+      await supabase.from('carrito_items').insert({ carrito_id: cid, producto_id: prod.id, codigo, nombre: vr.nombre.trim(), precio_costo: costo, precio_unit: precio, cantidad: cantVender, origen_id: vr.origen_id || null, proveedor_id: provId, es_generico: true })
       notify('🛒 ' + vr.nombre + ' al carrito')
       setVrOpen(false); setVrMas(false); setVrFoto(null); setVr({ nombre: '', precio: '', cantidad: '1', costo: '', proveedor_id: '', origen_id: '', color: '', metodo: 'Efectivo', stock_extra: '' })
       await cargarCarritos(); await cargarItems(cid); await loadAll()
@@ -535,7 +562,7 @@ export default function CatalogoScreen(P) {
             <h1 style={{ color: '#fff', fontSize: 18, fontWeight: 800, margin: 0 }}>📦 Catálogo</h1>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button onClick={() => setCarOpen(true)} style={{ background: carritos.length ? '#059669' : 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>🛒 Carritos{carritos.length ? ' (' + carritos.length + ')' : ''}</button>
+            <button onClick={() => setCarOpen(true)} style={{ background: carritos.length ? '#059669' : 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(() => { const ca = carritos.find(c => c.id === carActivo); const nom = ca ? (ca.clientes?.nombre || ca.nombre || 'Carrito') : null; return carritos.length ? (nom ? '🛒 ⭐ ' + nom + (carritos.length > 1 ? ' (' + carritos.length + ')' : '') : '🛒 Carritos (' + carritos.length + ')') : '🛒 Carritos' })()}</button>
             <button onClick={() => { setVrOpen(true); setVrMas(false) }} style={{ background: '#fff', border: 'none', borderRadius: 8, padding: '6px 10px', color: G.gold, fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>⚡ Venta rápida</button>
             <button onClick={ciclarVista} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{vistaIcono} {vistaLabel}</button>
             <button onClick={() => { setModoNav(n => !n); setModoSel(false); limpiarSel() }} style={{ background: modoNav ? '#fff' : 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, padding: '6px 10px', color: modoNav ? G.gold : '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{modoNav ? '✕ Salir' : '👁️ Ver'}</button>
@@ -734,7 +761,7 @@ export default function CatalogoScreen(P) {
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
                 {carritos.map(c => (
                   <button key={c.id} onClick={() => setCarActivo(c.id)} style={{ padding: '7px 12px', borderRadius: 10, border: '1px solid ' + (carActivo === c.id ? '#059669' : G.border), background: carActivo === c.id ? '#059669' : '#fff', color: carActivo === c.id ? '#fff' : G.text, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                    {c.clientes?.nombre || c.nombre || 'Carrito'}
+                    {carActivo === c.id ? '⭐ ' : ''}{c.clientes?.nombre || c.nombre || 'Carrito'}
                   </button>
                 ))}
                 <button onClick={nuevoCarrito} style={{ padding: '7px 12px', borderRadius: 10, border: '1px dashed ' + G.gold, background: '#fff', color: G.gold, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>+ Nuevo</button>
@@ -767,9 +794,9 @@ export default function CatalogoScreen(P) {
                         <p style={{ fontSize: 12, fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.nombre}</p>
                         <p style={{ fontSize: 10, color: G.muted, margin: 0 }}>{it.codigo}</p>
                       </div>
-                      <input type="number" value={it.cantidad} onChange={e => setItemCant(it, e.target.value)} style={{ width: 44, padding: '5px', borderRadius: 6, border: '1px solid ' + G.border, fontSize: 12, textAlign: 'center' }} />
+                      <CartNumInput value={it.cantidad} width={44} align="center" min={0} onCommit={val => setItemCant(it, val)} />
                       <span style={{ fontSize: 11, color: G.muted }}>×</span>
-                      <input type="number" value={it.precio_unit} onChange={e => setItemPrecio(it, e.target.value)} style={{ width: 56, padding: '5px', borderRadius: 6, border: '1px solid ' + G.border, fontSize: 12, textAlign: 'right' }} />
+                      <CartNumInput value={it.precio_unit} width={56} align="right" onCommit={val => setItemPrecio(it, val)} />
                       <span style={{ fontSize: 12, fontWeight: 700, color: G.gold, width: 52, textAlign: 'right' }}>S/{(it.precio_unit * it.cantidad).toFixed(0)}</span>
                       <button onClick={() => quitarItem(it)} style={{ padding: '4px 7px', borderRadius: 6, border: 'none', background: '#FEE2E2', color: G.err, fontSize: 11, cursor: 'pointer' }}>✕</button>
                     </div>
@@ -846,8 +873,8 @@ export default function CatalogoScreen(P) {
                   </div>
                   <label style={{ fontSize: 11, color: G.muted, display: 'block', marginTop: 8 }}>Color</label>
                   <input value={vr.color} onChange={e => setVr(s => ({ ...s, color: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box', marginBottom: 8 }} />
-                  <label style={{ fontSize: 11, color: G.muted }}>Origen</label>
-                  <select value={vr.origen_id} onChange={e => { const oid = e.target.value; const og = (oris || []).find(o => String(o.id) === String(oid)); setVr(s => ({ ...s, origen_id: oid, proveedor_id: og?.proveedor_id ? String(og.proveedor_id) : s.proveedor_id })) }} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 8, boxSizing: 'border-box' }}>
+                  <label style={{ fontSize: 11, color: G.muted }}>Origen {vr.origen_id && (() => { const o = (oris || []).find(x => String(x.id) === String(vr.origen_id)); return o ? <span style={{ color: '#059669', fontWeight: 700 }}>· quedan {o.cantidad ?? 0}</span> : null })()}</label>
+                  <select value={vr.origen_id} onChange={e => { const oid = e.target.value; const og = (oris || []).find(o => String(o.id) === String(oid)); setVr(s => ({ ...s, origen_id: oid, proveedor_id: og?.proveedor_id ? String(og.proveedor_id) : s.proveedor_id, nombre: s.nombre || (og?.nombre || ''), costo: (s.costo === '' && og?.precio_costo_defecto != null) ? String(og.precio_costo_defecto) : s.costo, precio: (s.precio === '' && og?.precio_venta_defecto != null) ? String(og.precio_venta_defecto) : s.precio })) }} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 8, boxSizing: 'border-box' }}>
                     <option value="">— Sin origen —</option>
                     {(oris || []).map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
                   </select>

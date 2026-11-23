@@ -955,7 +955,7 @@ export function StockScr(P) {
 
 /* ═══ HISTORIAL VENTAS ═══ */
 export function HistorialScr(P) {
-  const { tit, vents, clis, eid, lid, emp, setScr, notify, loadAll } = P
+  const { tit, vents, clis, eid, lid, emp, orisAll, setScr, notify, loadAll } = P
   const [tab, setTab] = useState('lista')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
@@ -982,7 +982,7 @@ export function HistorialScr(P) {
 
   const abrirEdit = (v) => {
     setEditV(v)
-    setEf({ cantidad: String(v.cantidad), precio_venta_real: String(v.precio_venta_real), precio_costo: v.precio_costo != null ? String(v.precio_costo) : '', cliente_id: v.cliente_id || '', metodo_pago: v.metodo_pago || '', tipo_entrega: v.tipo_entrega || '', nota: v.nota || '', costo_devuelto: !!v.costo_devuelto, fecha: v.created_at ? v.created_at.slice(0, 10) : '' })
+    setEf({ cantidad: String(v.cantidad), precio_venta_real: String(v.precio_venta_real), precio_costo: v.precio_costo != null ? String(v.precio_costo) : '', cliente_id: v.cliente_id || '', metodo_pago: v.metodo_pago || '', tipo_entrega: v.tipo_entrega || '', nota: v.nota || '', costo_devuelto: !!v.costo_devuelto, fecha: v.created_at ? v.created_at.slice(0, 10) : '', origen_id: v.origen_id != null ? String(v.origen_id) : '' })
   }
 
   const guardarEdit = async () => {
@@ -994,8 +994,29 @@ export function HistorialScr(P) {
     setGuardandoV(true)
     try {
       const difCant = nuevaCant - editV.cantidad // positivo = se vendió más → descontar stock
-      // Ajustar stock si cambió la cantidad
-      if (difCant !== 0 && editV.producto_id) {
+      const esGenerica = !!editV.productos?.es_generico
+      const nuevoOri = ef.origen_id !== '' ? parseInt(ef.origen_id) : null
+      const oriAnterior = editV.origen_id != null ? parseInt(editV.origen_id) : null
+
+      if (esGenerica) {
+        // VENTA GENÉRICA (rápida): el stock vive en el ORIGEN (cantidad). Nunca toca stock de producto.
+        if (oriAnterior !== nuevoOri) {
+          // Redirección de origen: devolver al anterior la cant. original, descontar del nuevo la nueva cant.
+          if (oriAnterior) {
+            const { data: oa } = await supabase.from('origenes').select('cantidad').eq('id', oriAnterior).single()
+            if (oa) await supabase.from('origenes').update({ cantidad: (oa.cantidad || 0) + editV.cantidad }).eq('id', oriAnterior)
+          }
+          if (nuevoOri) {
+            const { data: on } = await supabase.from('origenes').select('cantidad').eq('id', nuevoOri).single()
+            if (on) await supabase.from('origenes').update({ cantidad: (on.cantidad || 0) - nuevaCant }).eq('id', nuevoOri)
+          }
+        } else if (difCant !== 0 && nuevoOri) {
+          // Mismo origen, cambió la cantidad: ajustar la diferencia
+          const { data: on } = await supabase.from('origenes').select('cantidad').eq('id', nuevoOri).single()
+          if (on) await supabase.from('origenes').update({ cantidad: (on.cantidad || 0) - difCant }).eq('id', nuevoOri)
+        }
+      } else if (difCant !== 0 && editV.producto_id) {
+        // VENTA NORMAL: ajusta stock del producto (o granel), como siempre. No se redirecciona a origen.
         const { data: prod } = await supabase.from('productos').select('cantidad, equivalente_granel, origen_id').eq('id', editV.producto_id).single()
         if (prod) {
           if (prod.equivalente_granel && prod.origen_id) {
@@ -1016,6 +1037,7 @@ export function HistorialScr(P) {
         tipo_entrega: ef.tipo_entrega || null,
         nota: ef.nota || null,
         costo_devuelto: ef.costo_devuelto,
+        ...(esGenerica ? { origen_id: nuevoOri } : {}),
         ...(ef.fecha ? { created_at: new Date(ef.fecha + 'T12:00:00').toISOString() } : {})
       }).eq('id', editV.id)
       notify('✅ Venta actualizada')
@@ -1036,7 +1058,13 @@ export function HistorialScr(P) {
     setEliminando(true)
     try {
       // Devolver stock
-      if (v.producto_id) {
+      if (v.productos?.es_generico) {
+        // Genérica: devolver al ORIGEN (lote), no al producto
+        if (v.origen_id) {
+          const { data: og } = await supabase.from('origenes').select('cantidad').eq('id', v.origen_id).single()
+          if (og) await supabase.from('origenes').update({ cantidad: (og.cantidad || 0) + v.cantidad }).eq('id', v.origen_id)
+        }
+      } else if (v.producto_id) {
         const { data: prod } = await supabase.from('productos').select('cantidad, equivalente_granel, origen_id').eq('id', v.producto_id).single()
         if (prod) {
           if (prod.equivalente_granel && prod.origen_id) {
@@ -1395,6 +1423,16 @@ export function HistorialScr(P) {
                   <label style={{ fontSize: 11, color: G.muted }}>Costo (lo que te costó)</label>
                   <input type="number" value={ef.precio_costo} onChange={e => setEf(s => ({ ...s, precio_costo: e.target.value }))} placeholder="0" style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, boxSizing: 'border-box' }} />
                 </div>
+                {editV.productos?.es_generico && (
+                  <div style={{ marginTop: 8, background: '#FFFBEB', border: '1px dashed ' + G.gold, borderRadius: 8, padding: 8 }}>
+                    <label style={{ fontSize: 11, color: G.goldDk, fontWeight: 700 }}>🔀 Redireccionar a origen (descuenta del lote)</label>
+                    <select value={ef.origen_id} onChange={e => setEf(s => ({ ...s, origen_id: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginTop: 4, boxSizing: 'border-box' }}>
+                      <option value="">— Sin origen —</option>
+                      {(orisAll || []).map(o => <option key={o.id} value={o.id}>{o.nombre} (quedan {o.cantidad ?? 0})</option>)}
+                    </select>
+                    <p style={{ fontSize: 10, color: G.muted, margin: '4px 0 0' }}>Solo venta rápida. Al guardar, descuenta la cantidad de este origen (y devuelve al anterior si lo cambias).</p>
+                  </div>
+                )}
                 <p style={{ fontSize: 10, color: G.warn, margin: '4px 0 10px' }}>⚠️ Cambiar la cantidad ajusta el stock. El costo afecta la ganancia.</p>
                 <label style={{ fontSize: 11, color: G.muted }}>Cliente</label>
                 <select value={ef.cliente_id} onChange={e => setEf(s => ({ ...s, cliente_id: e.target.value }))} style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid ' + G.border, fontSize: 13, background: '#fff', marginBottom: 8, boxSizing: 'border-box' }}>
