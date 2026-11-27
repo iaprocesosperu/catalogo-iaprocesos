@@ -760,13 +760,16 @@ export default function CatalogoScreen(P) {
         <div onClick={cerrarNav} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 380, maxHeight: '92vh', overflow: 'auto' }}>
             <div style={{ background: G.gold, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
-              <p style={{ color: '#fff', fontSize: 14, fontWeight: 800, margin: 0 }}>{navIdx + 1} / {fl.length}</p>
+              <p style={{ color: '#fff', fontSize: 14, fontWeight: 800, margin: 0 }}>{navIdx + 1} / {fl.length}{sel.length ? '  ·  ✓ ' + sel.length + ' elegida' + (sel.length !== 1 ? 's' : '') : ''}</p>
               <button onClick={cerrarNav} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', borderRadius: 8, width: 30, height: 30, color: '#fff', fontSize: 16, cursor: 'pointer' }}>✕</button>
             </div>
             <div style={{ padding: 16 }}>
-              {navProd.foto_url
-                ? <img src={navProd.foto_url} alt="" style={{ width: '100%', height: 340, objectFit: 'contain', borderRadius: 12, background: G.goldLt }} />
-                : <div style={{ width: '100%', height: 340, background: G.goldLt, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 48, opacity: 0.3 }}>📦</span></div>}
+              <div onClick={() => toggleSel(navProd.id)} style={{ position: 'relative', cursor: 'pointer' }}>
+                {navProd.foto_url
+                  ? <img src={navProd.foto_url} alt="" style={{ width: '100%', height: 340, objectFit: 'contain', borderRadius: 12, background: G.goldLt, outline: sel.includes(navProd.id) ? '4px solid #059669' : 'none', outlineOffset: -4 }} />
+                  : <div style={{ width: '100%', height: 340, background: G.goldLt, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', outline: sel.includes(navProd.id) ? '4px solid #059669' : 'none', outlineOffset: -4 }}><span style={{ fontSize: 48, opacity: 0.3 }}>📦</span></div>}
+                <div style={{ position: 'absolute', top: 10, left: 10, width: 32, height: 32, borderRadius: 16, background: sel.includes(navProd.id) ? '#059669' : 'rgba(255,255,255,0.85)', border: '2px solid ' + (sel.includes(navProd.id) ? '#059669' : '#ccc'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#fff', fontWeight: 900 }}>{sel.includes(navProd.id) ? '✓' : ''}</div>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
                 <span style={{ fontSize: 11, background: G.goldSf, color: G.goldDk, padding: '3px 8px', borderRadius: 5, fontWeight: 700 }}>{navProd.codigo}</span>
                 <span style={{ fontSize: 18, fontWeight: 900, color: G.gold }}>S/{navProd.precio_venta}</span>
@@ -777,7 +780,11 @@ export default function CatalogoScreen(P) {
                 <button onClick={() => setNavIdx(i => Math.max(0, i - 1))} disabled={navIdx === 0} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.border, background: navIdx === 0 ? '#f5f5f5' : '#fff', color: navIdx === 0 ? '#bbb' : G.text, fontSize: 13, fontWeight: 700, cursor: navIdx === 0 ? 'default' : 'pointer' }}>‹ Anterior</button>
                 <button onClick={() => setNavIdx(i => Math.min(fl.length - 1, i + 1))} disabled={navIdx >= fl.length - 1} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid ' + G.border, background: navIdx >= fl.length - 1 ? '#f5f5f5' : '#fff', color: navIdx >= fl.length - 1 ? '#bbb' : G.text, fontSize: 13, fontWeight: 700, cursor: navIdx >= fl.length - 1 ? 'default' : 'pointer' }}>Siguiente ›</button>
               </div>
-              <button onClick={editarDesdeNav} style={{ width: '100%', padding: 13, marginTop: 8, borderRadius: 10, border: 'none', background: G.gold, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>✏️ Editar en catálogo</button>
+              <button onClick={() => toggleSel(navProd.id)} style={{ width: '100%', padding: 13, marginTop: 8, borderRadius: 10, border: '2px solid ' + (sel.includes(navProd.id) ? '#059669' : G.gold), background: sel.includes(navProd.id) ? '#059669' : '#fff', color: sel.includes(navProd.id) ? '#fff' : G.goldDk, fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>{sel.includes(navProd.id) ? '✓ Seleccionada (tocar para quitar)' : '☑️ Seleccionar para ZIP'}</button>
+              {sel.length > 0 && (
+                <button onClick={() => setPideTipo(true)} style={{ width: '100%', padding: 13, marginTop: 8, borderRadius: 10, border: 'none', background: G.goldDk, color: '#fff', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>📦 Descargar ZIP ({sel.length})</button>
+              )}
+              <button onClick={editarDesdeNav} style={{ width: '100%', padding: 13, marginTop: 8, borderRadius: 10, border: '1px solid ' + G.border, background: '#fff', color: G.text, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>✏️ Editar en catálogo</button>
             </div>
           </div>
         </div>
