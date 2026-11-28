@@ -101,6 +101,11 @@ export default function PlantillaP1({
   const enCarrito = (p) => carrito.find((i) => i.id === p.id);
   const hayFiltros = fGenero || fTalla || fColor;
   const limpiarFiltros = () => { setFGenero(''); setFTalla(''); setFColor(''); };
+  // "Inicio": deja la página como recién entrada (sin filtros, sin búsqueda, arriba)
+  const irInicio = () => {
+    setLineaSel('todas'); setFGenero(''); setFTalla(''); setFColor(''); setBusqueda(''); setProdModal(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Navegación del popup: avanza/retrocede dentro de la lista filtrada (da la vuelta)
   const navegarModal = (dir) => {
@@ -150,22 +155,34 @@ export default function PlantillaP1({
     <div style={{ width: "100%", minHeight: "100vh", background: "#fff", color: "#34303a", fontFamily: "Arial, Helvetica, sans-serif" }}>
 
       {/* ══ CABECERA + NAV (fijos) ══ */}
+      <style>{`
+        .lc-header { background:#fff; padding:12px 4%; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+        .lc-logo { display:flex; align-items:center; }
+        .lc-logo img { width:220px; max-width:100%; height:55px; object-fit:contain; }
+        .lc-search { flex:1 1 200px; max-width:360px; padding:12px 18px; border:1px solid #e6cbd7; border-radius:25px; font-size:14px; box-sizing:border-box; }
+        @media (max-width:640px){
+          .lc-header { justify-content:center; }
+          .lc-logo { width:100%; justify-content:center; }
+          .lc-logo img { height:46px; }
+          .lc-search { flex:1 1 auto; max-width:none; }
+          .lc-cart { flex:0 0 auto; }
+        }
+      `}</style>
       <div style={{ position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 10px rgba(0,0,0,.08)" }}>
-        <header style={{ background: "#ffffff", padding: "12px 4%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "18px", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <header className="lc-header">
+          <div className="lc-logo">
             {cfg.logo_url
-              ? <img src={cfg.logo_url} alt={cfg.nombre_tienda || "La Casita del Ahorro"} style={{ width: "220px", maxWidth: "100%", height: "55px", objectFit: "contain" }} />
+              ? <img src={cfg.logo_url} alt={cfg.nombre_tienda || "La Casita del Ahorro"} />
               : <strong style={{ color: primario, fontSize: "22px" }}>{cfg.nombre_tienda || "LA CASITA DEL AHORRO"}</strong>}
           </div>
-          <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} type="search" placeholder="⌕  Buscar productos..."
-            style={{ flex: "1 1 200px", maxWidth: "360px", padding: "12px 18px", border: "1px solid #e6cbd7", borderRadius: "25px", fontSize: "14px", outlineColor: primario }} />
-          <button onClick={onVerCarrito} style={{ background: secundario, border: "none", color: "#74002e", cursor: "pointer", fontWeight: 800, padding: "8px 16px", borderRadius: 25, fontSize: 13 }}>
+          <input className="lc-search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} type="search" placeholder="⌕  Buscar productos..." style={{ outlineColor: primario }} />
+          <button className="lc-cart" onClick={onVerCarrito} style={{ background: secundario, border: "none", color: "#74002e", cursor: "pointer", fontWeight: 800, padding: "10px 16px", borderRadius: 25, fontSize: 13, whiteSpace: "nowrap" }}>
             🛒 {totalItems > 0 ? `${totalItems} · S/ ${Number(totalPrecio).toFixed(2)}` : 'Carrito'}
           </button>
         </header>
 
         <nav style={{ background: `linear-gradient(90deg, ${primario}, #bd004e)`, padding: "12px 4%", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", flexWrap: "wrap" }}>
-          <button onClick={() => setLineaSel('todas')}
+          <button onClick={irInicio}
             style={{ background: lineaSel === 'todas' ? secundario : 'transparent', color: lineaSel === 'todas' ? "#74002e" : '#fff', padding: "9px 25px", borderRadius: "25px", fontWeight: 800, border: 'none', cursor: 'pointer' }}>Inicio</button>
           {hayCategorias && categoriasActivas.map((linea, index) => (
             <button key={linea.id || index} onClick={() => setLineaSel(linea.id)}
@@ -182,7 +199,7 @@ export default function PlantillaP1({
       <style>{`
         .lc-banner { display:block; width:100%; height:auto; max-height:340px; object-fit:cover; object-position:center; background:#fff; }
         @media (max-width:640px){
-          .lc-banner { object-fit:contain; max-height:none; }
+          .lc-banner { height:150px; object-fit:cover; }
         }
       `}</style>
       <section style={{ width: "100%", background: "#fff" }}>
@@ -213,11 +230,19 @@ export default function PlantillaP1({
       )}
 
       {/* ══ BENEFICIOS ══ */}
-      <section style={{ margin: "0 4% 25px", padding: "15px", border: `1px solid ${secundario}`, borderRadius: "35px", background: "#fffafd", display: "flex", flexWrap: "wrap", justifyContent: "space-around", gap: "15px" }}>
-        {[["🚚", "Tienda física en Caraz", "Visítanos y encuentra más variedad"], ["🏷️", "Precios accesibles", "Para tu hogar y tu familia"], ["🤝", "Se reciben consignaciones", "Dale un nuevo uso a tu ropa"]].map((item, index) => (
-          <div key={index} style={{ display: "flex", alignItems: "center", gap: "12px", flex: "1 1 200px" }}>
-            <span style={{ color: primario, fontSize: "30px" }}>{item[0]}</span>
-            <div><strong style={{ color: primario, fontSize: "14px" }}>{item[1]}</strong><div style={{ fontSize: "12px", color: "#666" }}>{item[2]}</div></div>
+      <style>{`
+        .lc-benef { margin:0 4% 22px; padding:14px 18px; border:1px solid ${secundario}; border-radius:24px; background:#fffafd; display:flex; flex-wrap:wrap; justify-content:space-around; gap:14px; }
+        .lc-benef-item { display:flex; align-items:center; gap:12px; flex:1 1 200px; }
+        @media (max-width:640px){
+          .lc-benef { flex-direction:column; gap:10px; padding:14px 16px; }
+          .lc-benef-item { flex:1 1 auto; width:100%; }
+        }
+      `}</style>
+      <section className="lc-benef">
+        {[["🚚", "Tienda física en Caraz", "Visítanos y encuentra más variedad"], ["🏷️", "Precios accesibles", "Para tu hogar y tu familia"], ["🤝", "Se reciben consignaciones", ""]].map((item, index) => (
+          <div key={index} className="lc-benef-item">
+            <span style={{ color: primario, fontSize: "28px" }}>{item[0]}</span>
+            <div><strong style={{ color: primario, fontSize: "14px" }}>{item[1]}</strong>{item[2] && <div style={{ fontSize: "12px", color: "#666" }}>{item[2]}</div>}</div>
           </div>
         ))}
       </section>
