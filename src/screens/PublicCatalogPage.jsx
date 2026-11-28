@@ -33,6 +33,7 @@ const BENEFICIOS = [
 export default function PublicCatalogPage({ onIntranet }) {
   const [config, setConfig] = useState(null)
   const [prods, setProds] = useState([])
+  const [lineas, setLineas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [busqueda, setBusqueda] = useState('')
@@ -57,8 +58,28 @@ export default function PublicCatalogPage({ onIntranet }) {
       }
       if (cfgErr || !cfg) { setError('Catálogo no disponible'); setLoading(false); return }
       setConfig(cfg)
-      // Si NO es básico, PlantillaP1 carga sus propios productos (línea única o todas)
-      if (cfg.plantilla && cfg.plantilla !== 'basico') { setLoading(false); return }
+
+      const esPersonalizada = cfg.plantilla && cfg.plantilla !== 'basico'
+
+      if (esPersonalizada) {
+        // Plantilla rosa: cargamos TODAS las líneas de la empresa + sus productos.
+        //  - mostrar_todas_lineas = true  → todos los productos de la empresa
+        //  - false → solo la línea ligada al subdominio (cfg.linea_id)
+        const { data: lns } = await supabase.from('lineas').select('*')
+          .eq('empresa_id', cfg.empresa_id).eq('activo', true).order('nombre')
+        setLineas(lns || [])
+        let q = supabase.from('productos').select('*,categorias(nombre),lineas(nombre)')
+          .eq('empresa_id', cfg.empresa_id)
+          .eq('activo', true).eq('oculto', false).gt('cantidad', 0)
+          .order('created_at', { ascending: false })
+        if (!cfg.mostrar_todas_lineas && cfg.linea_id) q = q.eq('linea_id', cfg.linea_id)
+        const { data: ps } = await q
+        setProds(ps || [])
+        setLoading(false)
+        return
+      }
+
+      // Diseño básico (El Miau): solo la línea del subdominio
       const { data: ps } = await supabase
         .from('productos').select('*,categorias(nombre)')
         .eq('empresa_id', cfg.empresa_id).eq('linea_id', cfg.linea_id)
@@ -94,14 +115,6 @@ export default function PublicCatalogPage({ onIntranet }) {
     setCantModal(null)
   }
 
-  // ─── Despacho por plantilla ───
-  // Si la tienda tiene un diseño personalizado, lo renderizamos y salimos.
-  if (config && config.plantilla && config.plantilla !== 'basico') {
-    if (config.plantilla === 'personalizado_1')
-      return <PlantillaP1 config={config} onIntranet={onIntranet} />
-    // (otras plantillas futuras caen al diseño básico de abajo)
-  }
-
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FFFDF5' }}>
       <div style={{ textAlign: 'center' }}>
@@ -123,6 +136,23 @@ export default function PublicCatalogPage({ onIntranet }) {
       onVolver={() => setVerCarrito(false)}
       onPedidoEnviado={() => { setCarrito([]); setVerCarrito(false) }} />
   )
+
+  // ─── Despacho por plantilla (con datos ya cargados) ───
+  if (config && config.plantilla === 'personalizado_1') {
+    return (
+      <PlantillaP1
+        config={config}
+        lineas={lineas}
+        productos={prods}
+        onAgregar={(p) => agregarAlCarrito(p, 1)}
+        onVerCarrito={() => setVerCarrito(true)}
+        carrito={carrito}
+        totalItems={totalCarrito}
+        totalPrecio={totalPrecio}
+        onIntranet={onIntranet}
+      />
+    )
+  }
 
   const waMensaje = encodeURIComponent('Hola, estoy interesado/a en sus productos de El Miau')
   const waLink = config?.whatsapp
