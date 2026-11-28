@@ -186,20 +186,42 @@ export default function PlantillaP1({
         ))}
       </nav>
 
-      {/* BANNER PRINCIPAL
-          La imagen se muestra COMPLETA (contain) y centrada, nunca estirada ni recortada.
-          Se limita el ancho para que en pantallas grandes no se gigantice. */}
-      <section style={{ width: "100%", background: "#fff5f8", position: "relative", display: "flex", justifyContent: "center" }}>
-        {cfg.hero_url ? (
-          <img src={cfg.hero_url} alt={cfg.slogan || "La Casita del Ahorro"}
-            style={{ display: "block", width: "100%", maxWidth: "1200px", height: "auto", maxHeight: "360px", objectFit: "contain" }} />
-        ) : (
-          <div style={{ width: "100%", minHeight: "260px", display: "flex", alignItems: "center", padding: "35px 6%", background: `linear-gradient(120deg, #fff7fa, #ffe4ee)` }}>
-            <h1 style={{ color: primario, fontSize: "clamp(28px, 4vw, 48px)" }}>
-              {cfg.slogan || "Variedad, calidad y buenos precios"}
-            </h1>
+      {/* BANNER PRINCIPAL — construido por la web (NO imagen con texto quemado).
+          Texto en vivo a la izquierda + foto de productos a la derecha.
+          Se adapta a cualquier ancho; en móvil se apila. */}
+      <style>{`
+        .lc-hero { display:flex; align-items:stretch; width:100%; min-height:300px;
+          background:linear-gradient(120deg, ${primario} 0%, #bd004e 100%); }
+        .lc-hero-txt { flex:1 1 50%; display:flex; flex-direction:column; justify-content:center;
+          padding:36px 5%; }
+        .lc-hero-img { flex:1 1 50%; min-height:260px; background:#fff5f8; }
+        .lc-hero-img img { width:100%; height:100%; object-fit:cover; display:block; }
+        @media (max-width:760px){
+          .lc-hero { flex-direction:column; }
+          .lc-hero-txt { padding:28px 6%; text-align:center; align-items:center; }
+          .lc-hero-img { width:100%; min-height:200px; }
+        }
+      `}</style>
+      <section className="lc-hero">
+        <div className="lc-hero-txt">
+          <h1 style={{ color: "#fff", fontSize: "clamp(28px,4.5vw,46px)", fontWeight: 900, lineHeight: 1.1, margin: 0, textShadow: "0 3px 10px rgba(0,0,0,.2)" }}>
+            {cfg.slogan || "Variedad, calidad y buenos precios"}
+          </h1>
+          <div style={{ display: "inline-block", background: secundario, color: "#74002e", fontSize: "clamp(18px,2.6vw,26px)", fontWeight: 900, padding: "10px 26px", borderRadius: "30px", margin: "18px 0 24px", boxShadow: "0 4px 14px rgba(0,0,0,.18)" }}>
+            Aquí todo es barato
           </div>
-        )}
+          <div>
+            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer"
+              style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "#fff", color: primario, padding: "13px 28px", borderRadius: "50px", fontWeight: 900, fontSize: "16px", textDecoration: "none", boxShadow: "0 5px 16px rgba(0,0,0,.2)" }}>
+              📲 {whatsapp || "Contáctanos"}
+            </a>
+          </div>
+        </div>
+        <div className="lc-hero-img">
+          {cfg.hero_url
+            ? <img src={cfg.hero_url} alt="La Casita del Ahorro" />
+            : <div style={{ width: "100%", height: "100%", minHeight: 260, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 72 }}>🛍️</div>}
+        </div>
       </section>
 
       {/* CATEGORÍAS */}
