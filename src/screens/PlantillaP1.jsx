@@ -186,13 +186,15 @@ export default function PlantillaP1({
         ))}
       </nav>
 
-      {/* BANNER PRINCIPAL */}
-      <section style={{ width: "100%", background: "#fff5f8", position: "relative" }}>
+      {/* BANNER PRINCIPAL
+          La imagen se muestra COMPLETA (contain) y centrada, nunca estirada ni recortada.
+          Se limita el ancho para que en pantallas grandes no se gigantice. */}
+      <section style={{ width: "100%", background: "#fff5f8", position: "relative", display: "flex", justifyContent: "center" }}>
         {cfg.hero_url ? (
           <img src={cfg.hero_url} alt={cfg.slogan || "La Casita del Ahorro"}
-            style={{ display: "block", width: "100%", maxHeight: "340px", objectFit: "cover" }} />
+            style={{ display: "block", width: "100%", maxWidth: "1200px", height: "auto", maxHeight: "360px", objectFit: "contain" }} />
         ) : (
-          <div style={{ minHeight: "260px", display: "flex", alignItems: "center", padding: "35px 6%", background: `linear-gradient(120deg, #fff7fa, #ffe4ee)` }}>
+          <div style={{ width: "100%", minHeight: "260px", display: "flex", alignItems: "center", padding: "35px 6%", background: `linear-gradient(120deg, #fff7fa, #ffe4ee)` }}>
             <h1 style={{ color: primario, fontSize: "clamp(28px, 4vw, 48px)" }}>
               {cfg.slogan || "Variedad, calidad y buenos precios"}
             </h1>
