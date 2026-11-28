@@ -70,7 +70,7 @@ export default function PublicCatalogPage({ onIntranet }) {
         setLineas(lns || [])
         let q = supabase.from('productos').select('*,categorias(nombre),lineas(nombre)')
           .eq('empresa_id', cfg.empresa_id)
-          .eq('activo', true).eq('oculto', false).gt('cantidad', 0)
+          .eq('activo', true).eq('oculto', false).eq('mostrar_en_web', true).gt('cantidad', 0)
           .order('created_at', { ascending: false })
         if (!cfg.mostrar_todas_lineas && cfg.linea_id) q = q.eq('linea_id', cfg.linea_id)
         const { data: ps } = await q

@@ -13,8 +13,9 @@ export default function RegistrarScreen(P) {
     codigo: ep.codigo || '', nombre: ep.nombre || '', precio_costo: String(ep.precio_costo || ''),
     precio_venta: String(ep.precio_venta || ''), color: ep.color || '', cantidad: String(ep.cantidad || 1),
     categoria_id: ep.categoria_id || '', origen_id: ep.origen_id || '', observacion: ep.observacion || '',
-    atributos: ep.atributos || {}, seccion_id: ep.seccion_id || '', equivalente_granel: String(ep.equivalente_granel || '')
-  } : { codigo: '', nombre: '', precio_costo: '', precio_venta: '', color: '', cantidad: '1', categoria_id: '', origen_id: '', observacion: '', atributos: {}, seccion_id: '', equivalente_granel: '' })
+    atributos: ep.atributos || {}, seccion_id: ep.seccion_id || '', equivalente_granel: String(ep.equivalente_granel || ''),
+    mostrar_en_web: ep.mostrar_en_web !== false, destacado: !!ep.destacado
+  } : { codigo: '', nombre: '', precio_costo: '', precio_venta: '', color: '', cantidad: '1', categoria_id: '', origen_id: '', observacion: '', atributos: {}, seccion_id: '', equivalente_granel: '', mostrar_en_web: true, destacado: false })
 
   // ── FOTOS (múltiples) ──
   // Cada entrada: { id, url, es_principal, esNueva, file }
@@ -317,6 +318,7 @@ export default function RegistrarScreen(P) {
         precio_venta: parseFloat(f.precio_venta) || 0, cantidad: parseInt(f.cantidad) || 1,
         color: f.color, atributos: f.atributos, observacion: f.observacion, foto_url,
         equivalente_granel: f.equivalente_granel ? parseFloat(f.equivalente_granel) : null,
+        mostrar_en_web: f.mostrar_en_web !== false, destacado: !!f.destacado,
         updated_at: new Date().toISOString()
       }
 
@@ -698,6 +700,26 @@ export default function RegistrarScreen(P) {
               <textarea value={f.observacion} onChange={e => s('observacion', e.target.value)} rows={2} style={{ ...iS(G), resize: 'vertical' }} /></div>
             <VoiceBtn onResult={t => s('observacion', (f.observacion ? f.observacion + ' ' : '') + t)} />
           </div>
+        </Crd>
+
+        {/* Visibilidad en la página web */}
+        <Crd title="🌐 Página web">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 0' }}>
+            <input type="checkbox" checked={f.mostrar_en_web !== false} onChange={e => s('mostrar_en_web', e.target.checked)}
+              style={{ width: 18, height: 18, accentColor: G.gold, cursor: 'pointer' }} />
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>Mostrar en la web</p>
+              <p style={{ fontSize: 11, color: G.muted, margin: 0 }}>Si lo desactivas, no aparece en la página aunque tenga stock</p>
+            </div>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 0' }}>
+            <input type="checkbox" checked={!!f.destacado} onChange={e => s('destacado', e.target.checked)}
+              style={{ width: 18, height: 18, accentColor: G.gold, cursor: 'pointer' }} />
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>⭐ Producto destacado</p>
+              <p style={{ fontSize: 11, color: G.muted, margin: 0 }}>Aparece en la sección "Productos destacados"</p>
+            </div>
+          </label>
         </Crd>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>

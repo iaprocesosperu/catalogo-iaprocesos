@@ -181,8 +181,8 @@ export default function CarritoPage({ carrito, config, onVolver, onPedidoEnviado
           <textarea value={form.nota} onChange={e => s('nota', e.target.value)} placeholder="Nota adicional (opcional)" rows={2} style={{ ...iS, resize: 'vertical' }} />
         </div>
 
-        {/* Delivery */}
-        <div style={{ background: '#fff', borderRadius: 14, padding: 14, marginBottom: 14, border: '1px solid #eee' }}>
+        {/* Delivery — OCULTO a pedido de La Casita (el pedido se coordina por WhatsApp) */}
+        <div style={{ display: 'none', background: '#fff', borderRadius: 14, padding: 14, marginBottom: 14, border: '1px solid #eee' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: delivery ? 14 : 0 }}>
             <input type="checkbox" checked={delivery} onChange={e => setDelivery(e.target.checked)}
               style={{ width: 18, height: 18, accentColor: C, cursor: 'pointer' }} />

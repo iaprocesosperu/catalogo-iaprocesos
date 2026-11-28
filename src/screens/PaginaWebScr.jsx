@@ -8,7 +8,7 @@ export default function PaginaWebScr({ emp, notify }) {
   const [saving, setSaving] = useState(false)
   const [f, setF] = useState({
     nombre_tienda: '', slogan: '', whatsapp: '', whatsapp_link: '',
-    email: '', direccion: '', facebook_url: '', color_primario: '#C5A55A', color_secundario: '#2D7D7D'
+    email: '', direccion: '', facebook_url: '', horarios: '', color_primario: '#C5A55A', color_secundario: '#2D7D7D'
   })
   const [bannerFile, setBannerFile] = useState(null)
   const [bannerPrev, setBannerPrev] = useState(null)
@@ -16,6 +16,8 @@ export default function PaginaWebScr({ emp, notify }) {
   const [heroPrev, setHeroPrev] = useState(null)
   const [logoFile, setLogoFile] = useState(null)
   const [logoPrev, setLogoPrev] = useState(null)
+  const [mapaFile, setMapaFile] = useState(null)
+  const [mapaPrev, setMapaPrev] = useState(null)
   const [subdominios, setSubdominios] = useState([])
   const [subSel, setSubSel] = useState(null)
   const s = (k, v) => setF(p => ({ ...p, [k]: v }))
@@ -59,15 +61,24 @@ export default function PaginaWebScr({ emp, notify }) {
       email:            sub.email            || '',
       direccion:        sub.direccion        || '',
       facebook_url:     sub.facebook_url     || '',
+      horarios:         sub.horarios         || '',
       color_primario:   sub.color_primario   || '#C5A55A',
       color_secundario: sub.color_secundario || '#2D7D7D'
     })
     setBannerPrev(sub.banner_url || null)
     setHeroPrev(sub.hero_url || null)
     setLogoPrev(sub.logo_url || null)
+    setMapaPrev(sub.mapa_url || null)
     setBannerFile(null)
     setHeroFile(null)
     setLogoFile(null)
+    setMapaFile(null)
+  }
+
+  const onMapa = e => {
+    const file = e.target.files?.[0]; if (!file) return
+    setMapaFile(file)
+    const r = new FileReader(); r.onload = ev => setMapaPrev(ev.target.result); r.readAsDataURL(file)
   }
 
   const onBanner = e => {
@@ -106,6 +117,12 @@ export default function PaginaWebScr({ emp, notify }) {
         updates.logo_url = await subirFoto(blob, `logo_${subSel.subdominio}`)
       } else if (!logoPrev) {
         updates.logo_url = null
+      }
+      if (mapaFile) {
+        const blob = await comprimirImagen(mapaFile, 1200)
+        updates.mapa_url = await subirFoto(blob, `mapa_${subSel.subdominio}`)
+      } else if (!mapaPrev) {
+        updates.mapa_url = null
       }
       if (!bannerPrev && !bannerFile) updates.banner_url = null
       if (!heroPrev && !heroFile) updates.hero_url = null
@@ -253,8 +270,30 @@ export default function PaginaWebScr({ emp, notify }) {
               <input value={f.email} onChange={e => s('email', e.target.value)} placeholder="elmiau@gmail.com" style={iS} type="email" />
               <label style={lS}>DIRECCIÓN</label>
               <input value={f.direccion} onChange={e => s('direccion', e.target.value)} placeholder="Marcona, 11420, Peru" style={iS} />
+              <label style={lS}>HORARIOS DE ATENCIÓN</label>
+              <textarea value={f.horarios} onChange={e => s('horarios', e.target.value)} rows={2}
+                placeholder="Ej: Miércoles, Sábados, Domingos y Feriados&#10;12:00 pm a 8:00 pm"
+                style={{ ...iS, resize: 'vertical', fontFamily: 'inherit' }} />
               <label style={lS}>FACEBOOK (URL completa)</label>
               <input value={f.facebook_url} onChange={e => s('facebook_url', e.target.value)} placeholder="https://facebook.com/..." style={iS} />
+            </div>
+
+            {/* MAPA */}
+            <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, border: '1px solid ' + G.border }}>
+              <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 4px' }}>🗺️ Mapa "Cómo llegar"</p>
+              <p style={{ fontSize: 11, color: G.muted, margin: '0 0 12px' }}>Imagen del mapa que aparece en la sección "Visítanos"</p>
+              {mapaPrev ? (
+                <div style={{ position: 'relative' }}>
+                  <img src={mapaPrev} alt="mapa" style={{ width: '100%', borderRadius: 10, border: '1px solid ' + G.border }} />
+                  <button onClick={() => { setMapaPrev(null); setMapaFile(null) }}
+                    style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Quitar</button>
+                </div>
+              ) : (
+                <label style={{ display: 'block', border: '2px dashed ' + G.border, borderRadius: 10, padding: 24, textAlign: 'center', cursor: 'pointer', color: G.muted, fontSize: 13 }}>
+                  📷 Subir imagen del mapa
+                  <input type="file" accept="image/*" onChange={onMapa} style={{ display: 'none' }} />
+                </label>
+              )}
             </div>
 
             {/* COLORES */}
