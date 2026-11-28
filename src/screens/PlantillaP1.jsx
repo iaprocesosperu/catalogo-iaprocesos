@@ -188,10 +188,10 @@ export default function PlantillaP1({
 
       {/* BANNER PRINCIPAL — SOLO la imagen del hero, centrada y con altura limitada.
           La imagen ya trae su propio texto; la web NO pone nada encima. */}
-      <section style={{ width: "100%", background: "#fff5f8" }}>
+      <section style={{ width: "100%", background: "#fff", display: "flex", justifyContent: "center" }}>
         {cfg.hero_url ? (
           <img src={cfg.hero_url} alt={cfg.nombre_tienda || "La Casita del Ahorro"}
-            style={{ display: "block", width: "100%", height: "clamp(180px, 22vw, 320px)", objectFit: "cover", objectPosition: "center" }} />
+            style={{ display: "block", width: "100%", maxWidth: "1400px", height: "auto", objectFit: "contain" }} />
         ) : (
           <div style={{ width: "100%", minHeight: "240px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "30px 6%", textAlign: "center", background: `linear-gradient(120deg, ${primario}, #bd004e)` }}>
             <h1 style={{ color: "#fff", fontSize: "clamp(26px,4vw,44px)", fontWeight: 900, margin: 0 }}>
