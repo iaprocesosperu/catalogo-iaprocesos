@@ -33,8 +33,8 @@ const getSubdominio = () => {
   }
   // Dominio de Vercel sin ?tienda= → intranet (NO público)
   if (hostname.endsWith('vercel.app')) return null
-  // 3) Dominio propio (lacasitadelahorro.com, etc.)
-  return hostname
+  // 3) Dominio propio (lacasitadelahorro.com, etc.) — sin el "www."
+  return hostname.replace(/^www\./, '')
 }
 
 /* ═══ LOGIN ═══ */

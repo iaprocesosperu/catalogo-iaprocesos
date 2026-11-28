@@ -14,7 +14,8 @@ const resolverTienda = () => {
   if (hostname.endsWith('iaprocesos.com.pe')) return { tipo: 'subdominio', valor: hostname.split('.')[0] }
   if (hostname.endsWith('vercel.app') || hostname === 'localhost' || hostname === '127.0.0.1')
     return { tipo: 'subdominio', valor: hostname.split('.')[0] }
-  return { tipo: 'dominio', valor: hostname }
+  // Dominio propio — quitamos el "www." para que coincida con la base
+  return { tipo: 'dominio', valor: hostname.replace(/^www\./, '') }
 }
 
 const TESTIMONIOS = [
