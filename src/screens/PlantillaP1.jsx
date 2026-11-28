@@ -102,6 +102,15 @@ export default function PlantillaP1({
   const hayFiltros = fGenero || fTalla || fColor;
   const limpiarFiltros = () => { setFGenero(''); setFTalla(''); setFColor(''); };
 
+  // Navegación del popup: avanza/retrocede dentro de la lista filtrada (da la vuelta)
+  const navegarModal = (dir) => {
+    if (!prodModal || filtrados.length === 0) return;
+    const idx = filtrados.findIndex((p) => p.id === prodModal.id);
+    if (idx === -1) return;
+    const next = (idx + dir + filtrados.length) % filtrados.length;
+    setProdModal(filtrados[next]);
+  };
+
   const chipFiltro = (activo) => ({
     padding: "6px 14px", borderRadius: "20px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
     border: "1px solid " + (activo ? primario : "#f0d5e0"),
@@ -168,11 +177,17 @@ export default function PlantillaP1({
         </nav>
       </div>
 
-      {/* ══ BANNER ══ */}
+      {/* ══ BANNER ══
+          PC: cover (llena todo el ancho). Celular: contain (completo, sin recortar). */}
+      <style>{`
+        .lc-banner { display:block; width:100%; height:auto; max-height:340px; object-fit:cover; object-position:center; background:#fff; }
+        @media (max-width:640px){
+          .lc-banner { object-fit:contain; max-height:none; }
+        }
+      `}</style>
       <section style={{ width: "100%", background: "#fff" }}>
         {cfg.hero_url ? (
-          <img src={cfg.hero_url} alt={cfg.nombre_tienda || "La Casita del Ahorro"}
-            style={{ display: "block", width: "100%", height: "auto", maxHeight: "clamp(140px, 20vw, 340px)", objectFit: "cover", objectPosition: "center" }} />
+          <img className="lc-banner" src={cfg.hero_url} alt={cfg.nombre_tienda || "La Casita del Ahorro"} />
         ) : (
           <div style={{ width: "100%", minHeight: "240px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "30px 6%", textAlign: "center", background: `linear-gradient(120deg, ${primario}, #bd004e)` }}>
             <h1 style={{ color: "#fff", fontSize: "clamp(26px,4vw,44px)", fontWeight: 900, margin: 0 }}>{cfg.slogan || "Variedad, calidad y buenos precios"}</h1>
@@ -306,41 +321,66 @@ export default function PlantillaP1({
       </footer>
       {onIntranet && <p onClick={onIntranet} style={{ textAlign: 'center', fontSize: 11, color: '#bbb', padding: '10px', cursor: 'pointer', background: '#fff' }}>· intranet ·</p>}
 
-      {/* ══ POPUP DE PRODUCTO ══ */}
-      {prodModal && (
-        <div onClick={() => setProdModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 22, maxWidth: 820, width: "100%", maxHeight: "90vh", overflow: "auto", display: "flex", flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 320px", background: "#fffafa", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 320, padding: 16, position: "relative" }}>
-              {imagenProducto(prodModal)
-                ? <img src={imagenProducto(prodModal)} alt={nombreProducto(prodModal)} style={{ maxWidth: "100%", maxHeight: 420, objectFit: "contain", borderRadius: 12 }} />
-                : <span style={{ fontSize: 80, opacity: .3 }}>📦</span>}
-              {prodModal.codigo && <span style={{ position: "absolute", top: 12, left: 12, background: "#fff", color: "#999", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 14 }}>#{prodModal.codigo}</span>}
-            </div>
-            <div style={{ flex: "1 1 300px", padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <h3 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: "#34303a", lineHeight: 1.2 }}>{nombreProducto(prodModal)}</h3>
-                <button onClick={() => setProdModal(null)} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: "#999", lineHeight: 1 }}>✕</button>
+      {/* ══ POPUP DE PRODUCTO (con flechas ‹ › y responsive) ══ */}
+      {prodModal && (() => {
+        const idx = filtrados.findIndex((p) => p.id === prodModal.id);
+        const total = filtrados.length;
+        return (
+          <div onClick={() => setProdModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+            <style>{`
+              .lc-modal { background:#fff; border-radius:20px; max-width:780px; width:100%; max-height:92vh; overflow:auto; display:flex; flex-wrap:wrap; position:relative; }
+              .lc-modal-img { flex:1 1 300px; background:#fffafa; display:flex; align-items:center; justify-content:center; min-height:300px; padding:16px; position:relative; }
+              .lc-modal-img img { max-width:100%; max-height:400px; object-fit:contain; border-radius:12px; }
+              .lc-modal-info { flex:1 1 280px; padding:22px; display:flex; flex-direction:column; gap:11px; }
+              .lc-nav { position:absolute; top:50%; transform:translateY(-50%); width:42px; height:42px; border-radius:50%; border:none; background:rgba(255,255,255,.95); box-shadow:0 2px 10px rgba(0,0,0,.2); font-size:22px; cursor:pointer; z-index:5; display:flex; align-items:center; justify-content:center; color:#74002e; }
+              @media (max-width:640px){
+                .lc-modal-img { min-height:200px; max-height:38vh; }
+                .lc-modal-img img { max-height:36vh; }
+                .lc-modal-info { padding:16px; }
+                .lc-nav { width:36px; height:36px; font-size:18px; }
+              }
+            `}</style>
+            <div onClick={(e) => e.stopPropagation()} className="lc-modal">
+              {/* Flechas */}
+              {total > 1 && (
+                <>
+                  <button className="lc-nav" style={{ left: 8 }} onClick={() => navegarModal(-1)}>‹</button>
+                  <button className="lc-nav" style={{ right: 8 }} onClick={() => navegarModal(1)}>›</button>
+                </>
+              )}
+              <div className="lc-modal-img">
+                {imagenProducto(prodModal)
+                  ? <img src={imagenProducto(prodModal)} alt={nombreProducto(prodModal)} />
+                  : <span style={{ fontSize: 70, opacity: .3 }}>📦</span>}
+                {prodModal.codigo && <span style={{ position: "absolute", top: 12, left: 12, background: "#fff", color: "#999", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 14 }}>#{prodModal.codigo}</span>}
               </div>
-              <p style={{ margin: 0, fontSize: 30, fontWeight: 900, color: primario }}>{formatPrecio(precioProducto(prodModal))}</p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {generoDe(prodModal) && <span style={pill(secundario)}>👤 {generoDe(prodModal)}</span>}
-                {tallaDe(prodModal) && <span style={pill(secundario)}>📏 Talla {tallaDe(prodModal)}</span>}
-                {prodModal.color && <span style={pill(secundario)}>🎨 {prodModal.color}</span>}
-                {prodModal.categorias?.nombre && <span style={pill(secundario)}>{prodModal.categorias.nombre}</span>}
-              </div>
-              {prodModal.observacion && <p style={{ margin: 0, fontSize: 14, color: "#777", lineHeight: 1.6 }}>{prodModal.observacion}</p>}
-              <div style={{ display: "flex", gap: 10, marginTop: "auto", flexWrap: "wrap" }}>
-                <button onClick={() => { onAgregar?.(prodModal); setProdModal(null); }} style={{ ...boton, flex: "1 1 150px", padding: "13px", fontSize: 15 }}>🛒 Agregar al carrito</button>
-                <a href={waProducto(prodModal)} target="_blank" rel="noreferrer" style={{ flex: "1 1 120px", textAlign: "center", background: "#25D366", color: "#fff", padding: "13px", borderRadius: 25, fontWeight: 800, textDecoration: "none", fontSize: 15 }}>📲 Consultar</a>
+              <div className="lc-modal-info">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <h3 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "#34303a", lineHeight: 1.2 }}>{nombreProducto(prodModal)}</h3>
+                  <button onClick={() => setProdModal(null)} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: "#999", lineHeight: 1 }}>✕</button>
+                </div>
+                <p style={{ margin: 0, fontSize: 28, fontWeight: 900, color: primario }}>{formatPrecio(precioProducto(prodModal))}</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {generoDe(prodModal) && <span style={pill()}>👤 {generoDe(prodModal)}</span>}
+                  {tallaDe(prodModal) && <span style={pill()}>📏 Talla {tallaDe(prodModal)}</span>}
+                  {prodModal.color && <span style={pill()}>🎨 {prodModal.color}</span>}
+                  {prodModal.categorias?.nombre && <span style={pill()}>{prodModal.categorias.nombre}</span>}
+                </div>
+                {prodModal.observacion && <p style={{ margin: 0, fontSize: 14, color: "#777", lineHeight: 1.6 }}>{prodModal.observacion}</p>}
+                <div style={{ display: "flex", gap: 10, marginTop: "auto", flexWrap: "wrap", paddingTop: 8 }}>
+                  <button onClick={() => { onAgregar?.(prodModal); setProdModal(null); }} style={{ ...boton, flex: "1 1 150px", padding: "13px", fontSize: 15 }}>🛒 Agregar</button>
+                  <a href={waProducto(prodModal)} target="_blank" rel="noreferrer" style={{ flex: "1 1 120px", textAlign: "center", background: "#25D366", color: "#fff", padding: "13px", borderRadius: 25, fontWeight: 800, textDecoration: "none", fontSize: 15 }}>📲 Consultar</a>
+                </div>
+                {total > 1 && idx >= 0 && <p style={{ textAlign: "center", fontSize: 12, color: "#bbb", margin: "4px 0 0" }}>{idx + 1} de {total} · usa ‹ › para navegar</p>}
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 
-  function pill(bg) {
+  function pill() {
     return { background: "#fff0f5", color: "#8a3a5a", padding: "6px 14px", borderRadius: 20, fontSize: 13, fontWeight: 700, border: "1px solid #f9e0e9" };
   }
 }

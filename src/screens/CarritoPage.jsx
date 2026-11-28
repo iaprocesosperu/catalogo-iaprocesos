@@ -168,7 +168,7 @@ export default function CarritoPage({ carrito, config, onVolver, onPedidoEnviado
         {/* Instrucciones pago */}
         <div style={{ background: '#EFF6FF', borderRadius: 12, padding: '12px 14px', marginBottom: 14, border: '1px solid #BFDBFE' }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8', margin: '0 0 6px' }}>📱 Cómo pagar:</p>
-          <p style={{ fontSize: 12, color: '#1E40AF', margin: '0 0 3px' }}>1. Envía S/{total.toFixed(2)} por Yape o transferencia</p>
+          <p style={{ fontSize: 12, color: '#1E40AF', margin: '0 0 3px' }}>1. Envía S/{total.toFixed(2)} por Yape</p>
           {config?.whatsapp && <p style={{ fontSize: 12, color: '#1E40AF', margin: '0 0 3px' }}>2. Número Yape: <strong>{config.whatsapp}</strong></p>}
           <p style={{ fontSize: 12, color: '#1E40AF', margin: 0 }}>3. Toma foto del comprobante y adjúntala abajo</p>
         </div>

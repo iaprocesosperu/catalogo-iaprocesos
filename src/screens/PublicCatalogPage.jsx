@@ -117,18 +117,19 @@ export default function PublicCatalogPage({ onIntranet }) {
   }
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FFFDF5' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff' }}>
+      <style>{`@keyframes lcspin{to{transform:rotate(360deg)}}`}</style>
       <div style={{ textAlign: 'center' }}>
-        <p style={{ fontSize: 48, margin: 0 }}>🐾</p>
-        <p style={{ color: C, fontSize: 15, fontWeight: 600 }}>Cargando catálogo...</p>
+        <div style={{ width: 44, height: 44, border: '4px solid #f3dce5', borderTopColor: '#e5005b', borderRadius: '50%', margin: '0 auto 14px', animation: 'lcspin .8s linear infinite' }} />
+        <p style={{ color: '#e5005b', fontSize: 15, fontWeight: 700 }}>Cargando tienda...</p>
       </div>
     </div>
   )
 
   if (error) return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', background: '#FFFDF5' }}>
-      <p style={{ fontSize: 48 }}>😿</p>
-      <p style={{ fontSize: 18, fontWeight: 600 }}>Catálogo no disponible</p>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', background: '#fff' }}>
+      <p style={{ fontSize: 48 }}>🛍️</p>
+      <p style={{ fontSize: 18, fontWeight: 600, color: '#e5005b' }}>Catálogo no disponible</p>
     </div>
   )
 
