@@ -16,11 +16,25 @@ import PromoPage from './screens/PromoPage'
 const getIsMobile = () => window.innerWidth <= 768
 
 const SUBDOMINIOS_PUBLICOS = ['lacasita', 'amychic', 'elmiau']
+// Resuelve la "tienda" de 3 formas:
+//  1) ?tienda=lacasita  → para PROBAR en catalogo-iaprocesos.vercel.app antes de propagar DNS
+//  2) subdominio de iaprocesos.com.pe  (lacasita.iaprocesos.com.pe)
+//  3) dominio propio  (lacasitadelahorro.com) → devuelve el hostname completo
 const getSubdominio = () => {
+  // 1) Parámetro de prueba
+  const t = new URLSearchParams(window.location.search).get('tienda')
+  if (t) return t.toLowerCase()
   const hostname = window.location.hostname
   if (hostname === 'localhost' || hostname === '127.0.0.1') return null
-  const sub = hostname.split('.')[0]
-  return SUBDOMINIOS_PUBLICOS.includes(sub) ? sub : null
+  // 2) Subdominio dentro de iaprocesos.com.pe
+  if (hostname.endsWith('iaprocesos.com.pe')) {
+    const sub = hostname.split('.')[0]
+    return SUBDOMINIOS_PUBLICOS.includes(sub) ? sub : null
+  }
+  // Dominio de Vercel sin ?tienda= → intranet (NO público)
+  if (hostname.endsWith('vercel.app')) return null
+  // 3) Dominio propio (lacasitadelahorro.com, etc.)
+  return hostname
 }
 
 /* ═══ LOGIN ═══ */

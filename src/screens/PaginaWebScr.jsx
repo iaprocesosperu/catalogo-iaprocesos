@@ -20,6 +20,18 @@ export default function PaginaWebScr({ emp, notify }) {
   const [subSel, setSubSel] = useState(null)
   const s = (k, v) => setF(p => ({ ...p, [k]: v }))
 
+  // URL pública inteligente:
+  //  1) dominio propio (lacasitadelahorro.com) si está configurado
+  //  2) subdominio de iaprocesos.com.pe
+  //  SIEMPRE con ?tienda= para poder probar en vercel.app aunque el DNS no haya propagado
+  const urlPublica = (sub) => {
+    if (!sub) return '#'
+    if (sub.dominio_propio) return `https://${sub.dominio_propio}`
+    return `https://${sub.subdominio}.iaprocesos.com.pe`
+  }
+  // URL de PRUEBA directa en Vercel (funciona ya, sin esperar DNS)
+  const urlPrueba = (sub) => sub ? `https://catalogo-iaprocesos.vercel.app/?tienda=${sub.subdominio}` : '#'
+
   useEffect(() => { cargar() }, [emp])
 
   const cargar = async () => {
@@ -138,13 +150,24 @@ export default function PaginaWebScr({ emp, notify }) {
         {subSel && (
           <>
             {/* URL activa */}
-            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 16 }}>🌐</span>
               <div>
-                <p style={{ fontSize: 11, color: '#166534', margin: 0 }}>URL pública activa</p>
-                <a href={`https://${subSel.subdominio}.iaprocesos.com.pe`} target="_blank" rel="noreferrer"
+                <p style={{ fontSize: 11, color: '#166534', margin: 0 }}>URL pública oficial</p>
+                <a href={urlPublica(subSel)} target="_blank" rel="noreferrer"
                   style={{ fontSize: 14, fontWeight: 700, color: '#15803D', textDecoration: 'none' }}>
-                  {subSel.subdominio}.iaprocesos.com.pe ↗
+                  {subSel.dominio_propio || `${subSel.subdominio}.iaprocesos.com.pe`} ↗
+                </a>
+              </div>
+            </div>
+            {/* URL de prueba (mientras propaga el DNS) */}
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16 }}>🧪</span>
+              <div>
+                <p style={{ fontSize: 11, color: '#1E40AF', margin: 0 }}>Probar ahora (sin esperar el dominio)</p>
+                <a href={urlPrueba(subSel)} target="_blank" rel="noreferrer"
+                  style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8', textDecoration: 'none', wordBreak: 'break-all' }}>
+                  catalogo-iaprocesos.vercel.app/?tienda={subSel.subdominio} ↗
                 </a>
               </div>
             </div>
@@ -275,8 +298,8 @@ export default function PaginaWebScr({ emp, notify }) {
               {saving ? '⏳ Guardando...' : '💾 Guardar cambios'}
             </button>
 
-            {/* Link ver página */}
-            <a href={`https://${subSel.subdominio}.iaprocesos.com.pe`} target="_blank" rel="noreferrer"
+            {/* Link ver página (usa la URL de prueba para que funcione ya) */}
+            <a href={urlPrueba(subSel)} target="_blank" rel="noreferrer"
               style={{ display: 'block', textAlign: 'center', marginTop: 12, color: G.gold, fontSize: 13, fontWeight: 600 }}>
               👁 Ver página pública →
             </a>

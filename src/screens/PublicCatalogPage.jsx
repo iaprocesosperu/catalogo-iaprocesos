@@ -1,6 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
 import CarritoPage from './CarritoPage'
+import PlantillaP1 from './PlantillaP1'
+
+// Resuelve qué tienda mostrar (igual criterio que App.jsx):
+//  ?tienda=  → subdominio por parámetro (para probar en vercel.app)
+//  *.iaprocesos.com.pe → subdominio
+//  dominio propio → columna dominio_propio
+const resolverTienda = () => {
+  const t = new URLSearchParams(window.location.search).get('tienda')
+  if (t) return { tipo: 'subdominio', valor: t.toLowerCase() }
+  const hostname = window.location.hostname
+  if (hostname.endsWith('iaprocesos.com.pe')) return { tipo: 'subdominio', valor: hostname.split('.')[0] }
+  if (hostname.endsWith('vercel.app') || hostname === 'localhost' || hostname === '127.0.0.1')
+    return { tipo: 'subdominio', valor: hostname.split('.')[0] }
+  return { tipo: 'dominio', valor: hostname }
+}
 
 const TESTIMONIOS = [
   { nombre: 'María R.', texto: 'Excelente arena, mi gato la adora. El delivery llegó rapidísimo.', estrellas: 5 },
@@ -27,13 +42,23 @@ export default function PublicCatalogPage({ onIntranet }) {
 
   useEffect(() => {
     const cargar = async () => {
-      const hostname = window.location.hostname
-      const sub = hostname.split('.')[0]
-      const { data: cfg, error: cfgErr } = await supabase
-        .from('subdominios').select('*,empresas(*),lineas(*)')
-        .eq('subdominio', sub).eq('activo', true).single()
+      const r = resolverTienda()
+      // Buscar la config por subdominio o por dominio propio
+      let cfg = null, cfgErr = null
+      if (r.tipo === 'dominio') {
+        const res = await supabase.from('subdominios').select('*,empresas(*),lineas(*)')
+          .eq('dominio_propio', r.valor).eq('activo', true).maybeSingle()
+        cfg = res.data; cfgErr = res.error
+      }
+      if (!cfg) {
+        const res = await supabase.from('subdominios').select('*,empresas(*),lineas(*)')
+          .eq('subdominio', r.valor).eq('activo', true).maybeSingle()
+        cfg = res.data; cfgErr = res.error
+      }
       if (cfgErr || !cfg) { setError('Catálogo no disponible'); setLoading(false); return }
       setConfig(cfg)
+      // Si NO es básico, PlantillaP1 carga sus propios productos (línea única o todas)
+      if (cfg.plantilla && cfg.plantilla !== 'basico') { setLoading(false); return }
       const { data: ps } = await supabase
         .from('productos').select('*,categorias(nombre)')
         .eq('empresa_id', cfg.empresa_id).eq('linea_id', cfg.linea_id)
@@ -67,6 +92,14 @@ export default function PublicCatalogPage({ onIntranet }) {
       return [...prev, { ...prod, cantidad: cant }]
     })
     setCantModal(null)
+  }
+
+  // ─── Despacho por plantilla ───
+  // Si la tienda tiene un diseño personalizado, lo renderizamos y salimos.
+  if (config && config.plantilla && config.plantilla !== 'basico') {
+    if (config.plantilla === 'personalizado_1')
+      return <PlantillaP1 config={config} onIntranet={onIntranet} />
+    // (otras plantillas futuras caen al diseño básico de abajo)
   }
 
   if (loading) return (
